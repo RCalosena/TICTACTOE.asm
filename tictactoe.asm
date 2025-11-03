@@ -22,25 +22,20 @@ TITLE AAAAAAA
             INT 21h
 
             LEA DX,COLUNA
-
             CALL PRINT
             CALL LEIA
-
             CALL VALIDA
 
-            MOV BL,AL
-
+            MOV BX,AX
 
             LEA DX,LINHA
-
             CALL PRINT
             CALL LEIA
-
             CALL VALIDA
 
-            MOV BH,AL
+            MOV SI,AX
 
-            TEST CH,01h
+            AND CH,01h
             JNZ ITS_O
 
             MOV CL,'X'
@@ -50,24 +45,14 @@ TITLE AAAAAAA
             MOV CL,'O'
 
             PRINT_MATRIX:
+            AND BX,000Fh
+            DEC BX
 
-            XOR DX,DX
-            XOR AX,AX
-
-            AND BL,0Fh
-            DEC BL
-
-            MOV AL,BL
-            AND BH,0Fh
-            DEC BH
+            AND SI,000Fh
+            DEC SI
             CALL MULT3
-
-            MOV DL,BH
             
-            ADD AX,DX
-            MOV SI,AX
-
-            MOV VELHA[SI],CL
+            MOV VELHA[BX][SI],CL
 
             MOV AH,2
             MOV DL,10
@@ -75,14 +60,11 @@ TITLE AAAAAAA
 
             PUSH CX
 
-            CALL MATRIZ
-            CALL VERIFICA_COLUNA
+            CALL MATRIZP
 
             POP CX
 
             INC CH
-
-
         JMP COMECO
 
         MOV AH,4Ch
@@ -102,48 +84,68 @@ TITLE AAAAAAA
     LEIA ENDP
 
     MULT3 PROC
-        MOV BL,BH
+        MOV AX,SI
         ;  * 2
-        SHL BH,1
-        ; (BH * 2) + BH = BH * 3
-        ADD BH,BL
+        SHL SI,1
+        ; (SI * 2) + AX = SI * 3
+        ADD SI,AX
         RET
     MULT3 ENDP
 
     VALIDA PROC
-        CMP AL,'1'
-        JL COMECO
+        VALIDA_DE_NOVO:
 
-        CMP AL,'3'
-        JA COMECO
+            CMP AL,'1'
+            JL INVALIDO
+
+            CMP AL,'3'
+            JA INVALIDO
+
+            JMP VALIDO
+
+            INVALIDO:
+                MOV AH,2
+                MOV DL,8
+                INT 21h
+                MOV DL,' '
+                INT 21h
+                MOV DL,8
+                INT 21h
+
+                CALL LEIA
+        JMP VALIDA_DE_NOVO
+
+        VALIDO:
 
         RET
     VALIDA ENDP
 
-    MATRIZ PROC
+    MATRIZP PROC
         XOR SI,SI
-        MOV CH,3
 
+        MOV CH,3
         LINHA_LOOP:
         MOV CL,3
+        XOR BX,BX
             COLUNA_LOOP:
-                MOV AL,VELHA[SI]
+                MOV AL,VELHA[BX][SI]
                 MOV DL,AL
                 MOV AH,2
                 INT 21h
 
-                INC SI
+                INC BX
                 DEC CL
             JNZ COLUNA_LOOP
         MOV AH,2
         MOV DL,10
         INT 21h
 
+        ADD SI,3
         DEC CH
         JNZ LINHA_LOOP
 
         RET
-    MATRIZ ENDP
+    MATRIZP ENDP
 
     HORIZONTAL PROC
         XOR SI,SI
