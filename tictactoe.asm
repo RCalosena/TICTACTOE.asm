@@ -9,63 +9,107 @@ TITLE JOGO DA VELHA
           DB '+', '+', '+'
           DB '+', '+', '+'
 
+    BEM_VINDO DB 'Modos de Jogo:',10,13,10,13,'1) Jogador Contra Jogador',10,13,'2) Jogador Contra CPU',10,13,'$'
+    ESCOLHA DB 10,13,'Escolha: $'
+    DIFFICULDADES DB 10,13,10,13,'Difficuldades:',10,13,10,13,'1) Facil',10,13,'2) Medio',10,13,'3) Dificil',10,13,'4) Impossivel',10,13,'$'
     LINHA    DB 10,13,'Digite a linha (1-3): $'
     COLUNA   DB 10,13,'Digite a coluna (1-3): $'
     OCUPADA  DB 10,13,'Coordenada ocupada! Tente de novo.$'
-    VENCEDOR  DB 10,13,'Jogador ','$'
-    VENCEU   DB ' venceu!$'
+    VENCEDOR  DB 10,13,'Jogador ',34,?,34,' venceu!$'
     EMPATE   DB 10,13,'empate!$'
     BORDA   DB ' | $'
 
+    MODO DB 0
+    DIFFICULDADE DB 0
     JOGADAS DB 0
 
 .CODE
     MAIN PROC
         MOV AX,@DATA
         MOV DS,AX
+
+        LEA DX,BEM_VINDO
+        CALL PRINT
+        LEA DX,ESCOLHA
+        CALL PRINT
+        CALL LEIA
+
+        MOV CL,1
+        MOV CH,2
+        CALL VALIDA
+        MOV MODO,AL
+
+        CMP MODO,2
+        JNE PVP
+
+        LEA DX,DIFFICULDADES
+        CALL PRINT
+        LEA DX,ESCOLHA
+        CALL PRINT
+        CALL LEIA
+        MOV CL,1
+        MOV CH,4
+        CALL VALIDA
+        MOV DIFFICULDADE,AL
+
+        PVP:
         XOR CX,CX
 
+        MOV AH,2
+        MOV DL,10
+        INT 21h
+        
         COMECO:
-            ; input para a coluna
+
+            ; determina o jogador atual
+            AND CH,01h
+            JNZ JOGADOR_O
+            MOV CL,'X'
+            JMP SETUP
+            JOGADOR_O:
+
+            MOV CL,'O'
+            CMP MODO,2
+            JNE SETUP
+            CALL PLAN_MOVE
+            JMP OCCUPIED
+
+            SETUP:
+
+            ; input para a coluna e linha
             ; caracteres fora de 1-3 sao omitidos
             LEA DX,COLUNA
             CALL PRINT
             CALL LEIA
+            
+            PUSH CX
+            MOV CL,1
+            MOV CH,3
             CALL VALIDA
             MOV BX,AX
-
-            ; input para a linha
-            ; caracteres fora de 1-3 sao omitidos
             LEA DX,LINHA
             CALL PRINT
             CALL LEIA
             CALL VALIDA
             MOV SI,AX
+            POP CX
 
-            ; determina o jogador atual
-            AND CH,01h
-            JNZ ITS_O
-            MOV CL,'X'
-            JMP PRINT_MATRIX
-            ITS_O:
-            MOV CL,'O'
-
-            PRINT_MATRIX:
             ; transforma os caracteres em coordenadas de matriz
-            AND BX,000Fh
             ; coluna 0 .. 2 = coluna input (1-3) - 1
+            OCCUPIED:
             DEC BX
 
             ; linha 0 .. 6 = linha input (1-3) - 1 * 3
-            AND SI,000Fh
             DEC SI
+            
+
             MOV AX,SI
             ; * 2
             SHL SI,1
             ; + valor original
             ADD SI,AX
             
-            ; verifica se está ocupada
+            ; verifica se tá ocupada
             CALL IS_OCCUPIED
 
             ; coloca o X ou O na posição
@@ -109,12 +153,9 @@ TITLE JOGO DA VELHA
         JMP FINAL
 
         VITORIA:
-        LEA DX,VENCEDOR
-        CALL PRINT
-        MOV AH,2
         MOV DX,DI
-        INT 21h
-        LEA DX,VENCEU
+        MOV VENCEDOR[11],DL
+        LEA DX,VENCEDOR
         CALL PRINT
 
         FINAL:
@@ -142,11 +183,12 @@ TITLE JOGO DA VELHA
         ; caso contrário, apaga o caracter anterior e pede input de novo
 
         VALIDA_DE_NOVO:
+            AND AX,000Fh
 
-            CMP AL,'1'
+            CMP AL,CL
             JL INVALIDO
 
-            CMP AL,'3'
+            CMP AL,CH
             JA INVALIDO
 
             JMP VALIDO
@@ -172,9 +214,20 @@ TITLE JOGO DA VELHA
 
         ; verifica se a posição escolhida já foi ocupada por um X ou O
 
+        CHECK:
+
         MOV AL,VELHA[BX][SI]
         CMP AL,'+'
         JE FALSE
+
+        CMP CL,'O'
+        JNE PLAYER
+        CMP MODO,2
+        JNE PLAYER
+        CALL PLAN_MOVE
+        JMP CHECK
+
+        PLAYER:
 
         LEA DX,OCUPADA
         CALL PRINT
@@ -261,6 +314,7 @@ TITLE JOGO DA VELHA
 
             SEGUINTE_F:
             XOR CH,CH
+            XOR SI,SI
             INC BX
             DEC CL
         JNZ COUNT_F
@@ -291,6 +345,7 @@ TITLE JOGO DA VELHA
             JMP NC
 
             SEGUINTE_L:
+            XOR BX,BX
             XOR CH,CH
             ADD SI,3
             DEC CL
@@ -325,6 +380,7 @@ TITLE JOGO DA VELHA
         
         MOV BX,2
         XOR SI,SI
+        XOR CH,CH
 
         NDI:
         CMP AL,VELHA[BX][SI]
@@ -342,6 +398,42 @@ TITLE JOGO DA VELHA
 
         RET
     VER_DIAGONAIS ENDP
+
+    RNG PROC
+        XOR BX,BX
+
+        DE_NOVO:
+        MOV AH,00h
+        INT 1Ah
+        AND DX,0003h
+        JZ DE_NOVO
+
+        CMP BX,0
+        JNZ OUTRO_NUMERO
+
+        MOV BX,DX
+        JMP DE_NOVO
+
+        OUTRO_NUMERO:
+
+        MOV SI,DX
+
+        RET
+    RNG ENDP
+
+    PLAN_MOVE PROC
+        CMP DIFFICULDADE,1
+        JE RNDM
+
+        RNDM:
+
+        PUSH CX
+        CALL RNG
+        POP CX
+        
+        RET
+    PLAN_MOVE ENDP
+
 END MAIN
 
 ; FAZER PVP
