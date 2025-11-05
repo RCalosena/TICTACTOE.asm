@@ -22,6 +22,7 @@ TITLE JOGO DA VELHA
     MODO DB 0
     DIFFICULDADE DB 0
     JOGADAS DB 0
+    
 
 .CODE
     MAIN PROC
@@ -71,6 +72,7 @@ TITLE JOGO DA VELHA
             MOV CL,'O'
             CMP MODO,2
             JNE SETUP
+                        
             CALL PLAN_MOVE
             JMP OCCUPIED
 
@@ -111,6 +113,8 @@ TITLE JOGO DA VELHA
             
             ; verifica se tá ocupada
             CALL IS_OCCUPIED
+            CMP AL,1
+            JE COMECO
 
             ; coloca o X ou O na posição
             MOV VELHA[BX][SI],CL
@@ -220,20 +224,26 @@ TITLE JOGO DA VELHA
         CMP AL,'+'
         JE FALSE
 
+        ; verifica se eh jogador ou cpu
+        ; se eh cpu, planeja seu movimento de novo
         CMP CL,'O'
         JNE PLAYER
         CMP MODO,2
         JNE PLAYER
-        CALL PLAN_MOVE
-        JMP CHECK
+        MOV AL,1
+        JMP TRUE
 
         PLAYER:
 
         LEA DX,OCUPADA
         CALL PRINT
-        JMP COMECO
+        MOV AL,1
+        JMP TRUE
+
 
         FALSE:
+        XOR AX,AX
+        TRUE:
         RET
     IS_OCCUPIED ENDP
 
@@ -402,26 +412,44 @@ TITLE JOGO DA VELHA
     RNG PROC
         XOR BX,BX
 
-        DE_NOVO:
         MOV AH,00h
         INT 1Ah
+
+        ADD DX,12756
+
+        T:
+        TEST DH,03h
+        JNZ NEXT_NUM
+
+        ADD DH,138
+        JMP T
+
+        NEXT_NUM:
+
+        AND DH,03h
+        MOV BL,DH
+
+        T2:
+        TEST DL,03h
+        JNZ NEXT_C
+        
+        ADD DL,117
+        JMP T2
+
+        NEXT_C:
+
         AND DX,0003h
-        JZ DE_NOVO
-
-        CMP BX,0
-        JNZ OUTRO_NUMERO
-
-        MOV BX,DX
-        JMP DE_NOVO
-
-        OUTRO_NUMERO:
-
         MOV SI,DX
+        
 
         RET
     RNG ENDP
 
     PLAN_MOVE PROC
+        ; Difficuldade 1: pega uma coordenada aleatoria
+        ; Difficuldade 2: mesmo que a anterior mas também verifica se o jogador vai ganhar
+        ; Difficuldade 3: mesmo que a anterior mas sempre começa no meio, e depois em uma das esquinas
+
         CMP DIFFICULDADE,1
         JE RNDM
 
@@ -436,6 +464,8 @@ TITLE JOGO DA VELHA
 
 END MAIN
 
-; FAZER PVP
-; FAZER PVCPU
+; FAZER CPU MEDIO
+; FAZER CPU DIFICIL
+; FAZER CPU IMPOSSIVEL
+; FAZER EXTRAS COM DEFINIÇÃO DE DIMENSÕES DA MATRIZ
 ; OTIMIZAR

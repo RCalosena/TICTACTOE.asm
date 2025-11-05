@@ -15,95 +15,44 @@ TITLE AAAAAAA
         MOV AX,@DATA
         MOV DS,AX
 
-        XOR CX,CX
-        JMP COMECO
-
-        ORIGIN:
-
-        XOR AL,AL
-        XOR BX,BX
-
-        CALL SALVAR_ESTADO
-
-        ;MOV AH,9
-        ;LEA DX,CLEAR
-        ;INT 21h
-
-        CALL MATRIZ
-
-        COMECO:
-
-            LEA DX,COLUNA
-            
-            CALL PRINT
-            CALL LEIA
-
-            CMP AL,'1'
-            JL ORIGIN
-            CMP AL,'3'
-            JA ORIGIN
-
-            MOV BL,AL
-
-
-            LEA DX,LINHA
-
-            CALL PRINT
-            CALL LEIA
-
-            CMP AL,'1'
-            JL ORIGIN
-            CMP AL,'3'
-            JA ORIGIN
-
-            MOV BH,AL
-
-            TEST CH,01h
-            JNZ ITS_O
-
-            MOV CL,'X'
-            JMP PRINT_MATRIX
-
-            ITS_O:
-            MOV CL,'O'
-
-            PRINT_MATRIX:
-
-            XOR DX,DX
-            XOR AX,AX
-
-            AND BL,0Fh
-            DEC BL
-
-            MOV AL,BL
-            AND BH,0Fh
-            DEC BH
-            CALL MULT3
-
-            MOV DL,BH
-            
-            ADD AX,DX
-            MOV SI,AX
-
-            MOV VELHA[SI],CL
-
-            MOV AH,2
-            MOV DL,10
-            INT 21h
-
-            PUSH CX
-
-            CALL MATRIZ
-
-            POP CX
-
-            INC CH
-
-        JMP COMECO
+        CALL RNG
 
         MOV AH,4Ch
         INT 21h
     MAIN ENDP
+
+    RNG PROC
+        XOR BX,BX
+
+        MOV AH,00h
+        INT 1Ah
+
+        RA:
+        TEST CX,0003h
+        JNZ NEXT_NUM
+
+        
+
+        SHR CX,1
+        JMP RA
+
+        NEXT_NUM:
+
+        MOV BX,CX
+
+        SEGUNDO:
+        TEST DX,0003h
+        JNZ NEXT_C
+        
+        SHR DX,1
+        JMP SEGUNDO
+
+        NEXT_C:
+        MOV SI,DX
+        
+
+        RET
+    RNG ENDP
 
     PRINT PROC
         MOV AH,9
