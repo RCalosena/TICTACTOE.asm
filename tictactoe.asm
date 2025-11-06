@@ -1,7 +1,41 @@
 TITLE JOGO DA VELHA
 .MODEL SMALL
-.386
 .STACK 100h
+
+PRINT MACRO FONTE
+        ; imprime uma msg
+        MOV AH,9
+        LEA DX,FONTE
+        INT 21h
+ENDM
+
+LEIA MACRO
+    ; le teclado
+    MOV AH,1
+    INT 21h
+ENDM
+
+TO_ASM MACRO
+    ; transforma numeros de 1-3 em coordenadas de matriz
+    ; assume que a coluna esta guardada em bx e que a linha esta guardada em si
+    PUSH AX
+    ; coluna 0 .. 2 = coluna input - 1
+    DEC BX
+    ; linha 0 .. 6 = (linha input - 1) * 3
+    DEC SI
+    MOV AX,SI
+    SHL SI,1 ; * 2
+    ADD SI,AX ; + valor original
+    POP AX
+ENDM
+
+SALVA_COORDS MACRO
+    PUSH CX
+    MOV WORD PTR COORD_STORAGE[0],BX
+    MOV WORD PTR COORD_STORAGE[1],SI
+    POP CX
+ENDM
+
 .DATA
     DIM EQU 3
 
@@ -22,35 +56,29 @@ TITLE JOGO DA VELHA
     MODO DB 0
     DIFFICULDADE DB 0
     JOGADAS DB 0
-    
-
+    COORD_STORAGE DB 0,0
 .CODE
     MAIN PROC
         MOV AX,@DATA
         MOV DS,AX
 
-        LEA DX,BEM_VINDO
-        CALL PRINT
-        LEA DX,ESCOLHA
-        CALL PRINT
-        CALL LEIA
+        PRINT BEM_VINDO
+        PRINT ESCOLHA
 
         MOV CL,1
         MOV CH,2
-        CALL VALIDA
+        CALL LEIA_E_VALIDA
         MOV MODO,AL
 
         CMP MODO,2
         JNE PVP
 
-        LEA DX,DIFFICULDADES
-        CALL PRINT
-        LEA DX,ESCOLHA
-        CALL PRINT
-        CALL LEIA
+        PRINT DIFFICULDADES
+        PRINT ESCOLHA
+
         MOV CL,1
         MOV CH,4
-        CALL VALIDA
+        CALL LEIA_E_VALIDA
         MOV DIFFICULDADE,AL
 
         PVP:
@@ -66,56 +94,47 @@ TITLE JOGO DA VELHA
             AND CH,01h
             JNZ JOGADOR_O
             MOV CL,'X'
+            ; salva o simbolo (X-O) para futuro uso
+            MOV DI,CX
+            AND DI,00FFh
             JMP SETUP
             JOGADOR_O:
 
             MOV CL,'O'
+            ; salva o simbolo (X-O) para futuro uso
+            MOV DI,CX
+            AND DI,00FFh
             CMP MODO,2
             JNE SETUP
                         
             CALL PLAN_MOVE
-            JMP OCCUPIED
+            JMP CPU_SKIP
 
             SETUP:
 
             ; input para a coluna e linha
             ; caracteres fora de 1-3 sao omitidos
-            LEA DX,COLUNA
-            CALL PRINT
-            CALL LEIA
+            PRINT COLUNA
             
             PUSH CX
             MOV CL,1
             MOV CH,3
-            CALL VALIDA
+            CALL LEIA_E_VALIDA
             MOV BX,AX
-            LEA DX,LINHA
-            CALL PRINT
-            CALL LEIA
-            CALL VALIDA
+            PRINT LINHA
+            CALL LEIA_E_VALIDA
             MOV SI,AX
             POP CX
-
-            ; transforma os caracteres em coordenadas de matriz
-            ; coluna 0 .. 2 = coluna input (1-3) - 1
-            OCCUPIED:
-            DEC BX
-
-            ; linha 0 .. 6 = linha input (1-3) - 1 * 3
-            DEC SI
-            
-
-            MOV AX,SI
-            ; * 2
-            SHL SI,1
-            ; + valor original
-            ADD SI,AX
+ 
+            ; transforma BX e SI em coordenadas legíveis pelo programa
+            TO_ASM
             
             ; verifica se tá ocupada
             CALL IS_OCCUPIED
             CMP AL,1
             JE COMECO
 
+            CPU_SKIP:
             ; coloca o X ou O na posição
             MOV VELHA[BX][SI],CL
 
@@ -125,16 +144,30 @@ TITLE JOGO DA VELHA
             INT 21h
             INT 21h
 
-            ; salva o simbolo (X-O) para futuro uso
-            MOV DI,CX
-            AND DI,00FFh
             ; salva CX para depois determinar o jogador
             PUSH CX
 
             ; imprime matriz e verifica se ha vitoria
             CALL MATRIZP
-            CALL VERIFICA_VITORIA
             
+            CMP JOGADAS,3
+            JNA NAOVER
+                ; passa por colunas linhas e diagonais para verificar se alguem ganhou
+                MOV DL,DIM
+                
+                CALL VER_COLUNAS
+                CMP AL,1
+                JE VITORIA
+
+                CALL VER_LINHAS
+                CMP AL,1
+                JE VITORIA
+
+                CALL VER_DIAGONAIS
+                CMP AL,1
+                JE VITORIA
+            NAOVER:
+
             ; volta o valor de cx
             POP CX
             ; CH == 1 { VEZ DO 'O' }
@@ -152,39 +185,26 @@ TITLE JOGO DA VELHA
         ; tipo de finalização
 
         DRAW:
-        LEA DX,EMPATE
-        CALL PRINT
+        PRINT EMPATE
         JMP FINAL
 
         VITORIA:
         MOV DX,DI
         MOV VENCEDOR[11],DL
-        LEA DX,VENCEDOR
-        CALL PRINT
+        PRINT VENCEDOR
 
         FINAL:
         MOV AH,4Ch
         INT 21h
     MAIN ENDP
 
-    PRINT PROC
-        ; imprime uma msg
-        MOV AH,9
-        INT 21h
-        RET
-    PRINT ENDP
-
-    LEIA PROC
-        ; le teclado
-        MOV AH,1
-        INT 21h
-        RET
-    LEIA ENDP
-
-    VALIDA PROC
+    LEIA_E_VALIDA PROC
 
         ; verifica se o input eh entre 1-3
         ; caso contrário, apaga o caracter anterior e pede input de novo
+
+        XOR AX,AX
+        JMP READ
 
         VALIDA_DE_NOVO:
             AND AX,000Fh
@@ -206,17 +226,20 @@ TITLE JOGO DA VELHA
                 MOV DL,8
                 INT 21h
 
-                CALL LEIA
+                READ:
+                LEIA
         JMP VALIDA_DE_NOVO
 
         VALIDO:
 
         RET
-    VALIDA ENDP
+    LEIA_E_VALIDA ENDP
 
     IS_OCCUPIED PROC
 
         ; verifica se a posição escolhida já foi ocupada por um X ou O
+        ; AL = 1 se verdadeiro
+        ; AL = 0 se falso
 
         CHECK:
 
@@ -225,24 +248,24 @@ TITLE JOGO DA VELHA
         JE FALSE
 
         ; verifica se eh jogador ou cpu
-        ; se eh cpu, planeja seu movimento de novo
+        ; se eh cpu, nao imprime a mensagem
         CMP CL,'O'
         JNE PLAYER
         CMP MODO,2
         JNE PLAYER
-        MOV AL,1
-        JMP TRUE
+        JMP V
 
         PLAYER:
 
-        LEA DX,OCUPADA
-        CALL PRINT
+        PRINT OCUPADA
+
+        V:
         MOV AL,1
         JMP TRUE
 
 
         FALSE:
-        XOR AX,AX
+        XOR AL,AL
         TRUE:
         RET
     IS_OCCUPIED ENDP
@@ -262,8 +285,7 @@ TITLE JOGO DA VELHA
             COLUNA_LOOP:
 
                 PUSH AX
-                LEA DX,BORDA
-                CALL PRINT
+                PRINT BORDA
                 POP AX
 
                 MOV AL,VELHA[BX][SI]
@@ -275,8 +297,7 @@ TITLE JOGO DA VELHA
             JNZ COLUNA_LOOP
 
         PUSH AX
-        LEA DX,BORDA
-        CALL PRINT
+        PRINT BORDA
         POP AX
 
         MOV DL,10
@@ -289,127 +310,196 @@ TITLE JOGO DA VELHA
         RET
     MATRIZP ENDP
 
-    VERIFICA_VITORIA PROC
-
-        ; passa por colunas linhas e diagonais para verificar se alguem ganhou
-
-        CALL VER_COLUNAS
-        CALL VER_LINHAS
-        CALL VER_DIAGONAIS
-
-        RET
-    VERIFICA_VITORIA ENDP
-
     VER_COLUNAS PROC
 
-        ; escaneia as colunas por um valor igual a DI (Simbolo do último jogador)
-        ; se achar, incrementa um contador. Se o contador chega a 3, tem vitoria
+        ; escaneia as colunas por um valor igual a DI (Simbolo X OU O)
+        ; se achar, incrementa um contador. o contador tenta atingir o valor de DL
+        ; retorna AL = 0 ou AL = 1
 
+        ; coordenadas
         XOR SI,SI
         XOR BX,BX
         XOR CX,CX
+        XOR DH,DH
+        ; salva o simbolo do jogador em al
         MOV AX,DI
+        ; contador de scans
         MOV CL,DIM
         COUNT_F:
             NL:
             CMP AL,VELHA[BX][SI]
-            JNE SEGUINTE_F
+            JNE SALVA_C
 
+            ; incrementa e compara com a meta
             INC CH
-            CMP CH,3
-            JE VITORIA
-
-            ADD SI,3
-            JMP NL
-
+            
+            JMP SEGUINTE_F
+                SALVA_C:
+                SALVA_COORDS
             SEGUINTE_F:
+            ADD SI,DIM
+            INC DH
+            CMP DH,DIM
+            JB NL ; Next Line
+
+            CMP CH,DL
+            JE CTRUE
+
+            ; reseteia o contador de sucesso
+            XOR DH,DH
             XOR CH,CH
+            ; nova coluna
             XOR SI,SI
             INC BX
-            DEC CL
-        JNZ COUNT_F
 
+            DEC CL
+        JNZ COUNT_F ; Count Fileiras
+        JMP CFALSE
+
+        CTRUE:
+        MOV AL,1
+        JMP CRETURN
+
+        CFALSE:
+        XOR AL,AL
+
+        CRETURN:
         RET
     VER_COLUNAS ENDP
 
     VER_LINHAS PROC
 
-        ; escaneia as linhas por um valor igual a DI (Simbolo do último jogador)
-        ; se achar, incrementa um contador. Se o contador chega a 3, tem vitoria
+        ; escaneia as linhas por um valor igual a DI (Simbolo X OU O)
+        ; se achar, incrementa um contador. o contador tenta atingir o valor de DL
+        ; retorna AL = 0 ou AL = 1
 
+        ; coordenadas
         XOR SI,SI
         XOR BX,BX
         XOR CX,CX
+        XOR DH,DH
+        ; quarda o simbolo em al
         MOV AX,DI
+        ; n de scans
         MOV CL,DIM
         COUNT_L:
             NC:
             CMP AL,VELHA[BX][SI]
-            JNE SEGUINTE_L
+            JNE SALVA_L
 
+            ; incrementa e compara com a meta
             INC CH
-            CMP CH,3
-            JE VITORIA
 
-            INC BX
-            JMP NC
-
+            JMP SEGUINTE_L
+                SALVA_L:
+                SALVA_COORDS
             SEGUINTE_L:
-            XOR BX,BX
-            XOR CH,CH
-            ADD SI,3
-            DEC CL
-        JNZ COUNT_L
+            INC BX
+            INC DH
+            CMP DH,DIM
+            JB NC ; Next Column
 
+            CMP CH,DL
+            JE LTRUE
+
+            ; reset sucesso
+            XOR DH,DH
+            XOR CH,CH
+            ; nova linha
+            XOR BX,BX
+            ADD SI,DIM
+
+            DEC CL
+        JNZ COUNT_L ; Count Linhas
+        JMP LFALSE
+
+        LTRUE:
+        MOV AL,1
+        JMP LRETURN
+
+        LFALSE:
+        XOR AL,AL
+
+        LRETURN:
         RET
     VER_LINHAS ENDP
 
     VER_DIAGONAIS PROC
 
-        ; escaneia a diagonal e diagonal espelhada por um valor igual a DI (Simbolo do último jogador)
-        ; se achar, incrementa um contador. Se o contador chega a 3, tem vitoria
+        ; escaneia a diagonal e diagonal espelhada por um valor igual a DI (Simbolo X OU 0)
+        ; se achar, incrementa um contador. o contador tenta atingir o valor de DL
+        ; retorna AL = 0 ou AL = 1
 
+        ; coordenadas
         XOR SI,SI
         XOR BX,BX
         XOR CX,CX
+        XOR DH,DH
+        ; simbolo do jogador em al
         MOV AX,DI
 
         ND:
         CMP AL,VELHA[BX][SI]
-        JNE SEGUINTE_D
+        JNE SALVA_D
 
+        ; incrementa sucesso e compara com a meta
         INC CH
-        CMP CH,3
-        JE VITORIA
 
-        ADD SI,3
-        INC BX
-        JMP ND
-
+        JMP SEGUINTE_D
+            SALVA_D:
+            SALVA_COORDS
         SEGUINTE_D:
-        
-        MOV BX,2
-        XOR SI,SI
+        ADD SI,DIM
+        INC BX
+        INC DH
+        CMP DH,DIM
+        JB ND ; Next Diagonal
+
+        CMP CH,DL
+        JE DTRUE
+        ; reseteia sucesso
+        XOR DH,DH
         XOR CH,CH
+        ; comeca no extremo direito
+        XOR SI,SI
+        MOV BX,2
 
         NDI:
         CMP AL,VELHA[BX][SI]
-        JNE NADA
+        JNE SALVA_DIN
 
+        ; incrementa sucesso e compara
         INC CH
-        CMP CH,3
-        JE VITORIA
 
-        ADD SI,3
+        JMP SEGUINTE_DIN
+            SALVA_DIN:
+            SALVA_COORDS
+        SEGUINTE_DIN:
+        ADD SI,DIM
         DEC BX
-        JMP NDI
+        INC DH
+        CMP DH,DIM
+        JB NDI ; Next Diagonal Inverted
+        CMP CH,DL
+        JE DTRUE
+        JMP DFALSE
 
-        NADA:
+        DTRUE:
+        MOV AL,1
+        JMP DRETURN
+
+        DFALSE:
+        XOR AL,AL
+
+        DRETURN:
 
         RET
     VER_DIAGONAIS ENDP
 
     RNG PROC
+
+        ; retorna duas coordenadas aleatorias 1-3
+
         XOR BX,BX
 
         MOV AH,00h
@@ -441,6 +531,7 @@ TITLE JOGO DA VELHA
         AND DX,0003h
         MOV SI,DX
         
+        TO_ASM
 
         RET
     RNG ENDP
@@ -453,18 +544,86 @@ TITLE JOGO DA VELHA
         CMP DIFFICULDADE,1
         JE RNDM
 
+        CMP DIFFICULDADE,2
+        JE WIN_OR_AVOID_LOSS
+
+        WIN_OR_AVOID_LOSS:
+
+        MOV DL,2
+
+        PUSH CX
+        CALL VER_COLUNAS
+        POP CX
+        CMP AL,1
+        JE WINC
+
+        LIN:
+        PUSH CX
+        CALL VER_LINHAS
+        POP CX
+        CMP AL,1
+        JE WINL
+
+        DIG:
+        PUSH CX
+        CALL VER_DIAGONAIS
+        POP CX
+        CMP AL,1
+        JE WIND
+        JMP RNDM
+
+        WINC:
+        MOV BX,WORD PTR COORD_STORAGE[0]
+        MOV SI,WORD PTR COORD_STORAGE[1]
+        AND BX,00FFh
+        AND SI,00FFh
+        CMP VELHA[BX][SI],'+'
+        JNE LIN
+        PUSH DX
+        POP DX
+        JMP GO_BACK
+
+        WINL:
+        MOV BX,WORD PTR COORD_STORAGE[0]
+        MOV SI,WORD PTR COORD_STORAGE[1]
+        AND BX,00FFh
+        AND SI,00FFh
+        CMP VELHA[BX][SI],'+'
+        JNE DIG
+        PUSH DX
+        POP DX
+        JMP GO_BACK
+
+        WIND:
+        MOV BX,WORD PTR COORD_STORAGE[0]
+        MOV SI,WORD PTR COORD_STORAGE[1]
+        AND BX,00FFh
+        AND SI,00FFh
+        CMP VELHA[BX][SI],'+'
+        JNE RNDM
+        PUSH DX
+        POP DX
+        JMP GO_BACK
+
         RNDM:
 
+        RPT:
         PUSH CX
         CALL RNG
         POP CX
+        CALL IS_OCCUPIED
+        CMP AL,1
+        JE RPT
         
+        GO_BACK:
         RET
     PLAN_MOVE ENDP
 
 END MAIN
 
-; FAZER CPU MEDIO
+; Mudar RNG para uma chance que muda em base a "avaliable tiles"
+; Otimizar ou organizar os VER_* PROCS e a lógica do WIN_OR_AVOID_LOSS
+
 ; FAZER CPU DIFICIL
 ; FAZER CPU IMPOSSIVEL
 ; FAZER EXTRAS COM DEFINIÇÃO DE DIMENSÕES DA MATRIZ
