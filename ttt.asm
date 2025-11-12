@@ -278,11 +278,18 @@ include macros.inc
 
         CMP DIFFICULDADE,2
         JE WIN_OR_AVOID_LOSS
+        JMP STTGZ
+
+        STRAT:
+        CALL CHECK_FORKS
+        CMP AL,1
+        JE FOUND_MOVE
+
+        STTGZ:
 
         CMP JOGADAS,1
         JA WIN_OR_AVOID_LOSS
 
-        STRAT:
         CALL STRATEGIZE
         JMP FOUND_MOVE
 
@@ -512,7 +519,7 @@ include macros.inc
             JB NC ; Next Column
 
             CMP CH,DL
-            JE LTRUE
+            JAE LTRUE
 
             ; reset sucesso
             XOR DH,DH
@@ -590,7 +597,7 @@ include macros.inc
         JB ND ; Next Diagonal
 
         CMP CH,DL
-        JE DTRUE
+        JAE DTRUE
         ; reseteia sucesso
         XOR DH,DH
         XOR CH,CH
@@ -618,7 +625,7 @@ include macros.inc
         CMP DH,DIM
         JB NDI ; Next Diagonal Inverted
         CMP CH,DL
-        JE DTRUE
+        JAE DTRUE
         JMP DFALSE
 
         DTRUE:
@@ -902,6 +909,125 @@ include macros.inc
 
         RET
     FIND_ADJACENT ENDP
+
+    CHECK_FORKS PROC
+        
+        ; imprime a matriz salva
+        ; adiciona bordas nos lados para estilizar
+
+        PUSH CX
+        PUSH DX
+        PUSH DI
+
+        XOR DX,DX
+        XOR SI,SI
+
+        MOV CH,DIM
+        SCANEIA_LINHA:
+        MOV CL,DIM
+        XOR BX,BX
+            SCANEIA_COLUNA:
+                XOR DH,DH
+
+                CMP VELHA[BX][SI],'+'
+                JNE PROX_COORD
+
+                MOV VELHA[BX][SI],'X'
+                XOR DI,DI
+                MOV DL,2
+
+                PUSH CX
+                MOV CL,'X'
+                CALL TESTA_FORK
+                POP CX
+                CMP AL,1
+                JE FORK
+
+                PROX_COORD:
+
+                INC BX
+                DEC CL
+            JNZ SCANEIA_COLUNA
+
+        ADD SI,DIM
+        DEC CH
+        JNZ SCANEIA_LINHA
+        XOR AL,AL
+        JMP NO_FORK
+
+        FORK:
+
+        MOV VELHA[BX][SI],'O'
+        MOV AL,1
+
+        NO_FORK:
+
+        POP DI
+        POP DX
+        POP CX
+
+        RET
+    CHECK_FORKS ENDP
+
+    TESTA_FORK PROC
+
+        CALL VER_COLUNAS
+        CMP AL,1
+        JNE CFL
+
+        PUSH BX
+        PUSH SI
+        GET_AND_COMPARE
+        POP SI
+        POP BX
+        JNE CFL
+
+        INC DH
+
+        CFL:
+        CALL VER_LINHAS
+        CMP AL,1
+        JNE CFD
+
+        PUSH BX
+        PUSH SI
+        GET_AND_COMPARE
+        POP SI
+        POP BX
+        JNE CFD
+
+        INC DH
+
+        CFD:
+        CALL VER_DIAGONAIS
+        CMP AL,1
+        JNE RESULT
+        PUSH BX
+        PUSH SI
+        GET_AND_COMPARE
+        POP SI
+        POP BX
+        JNE RESULT
+        
+        INC DH
+
+        RESULT:
+        CMP DH,2
+        JAE FORK_TRUE
+
+        XOR AL,AL
+        JMP FORK_FALSE
+
+        FORK_TRUE:
+        MOV AL,1
+
+        FORK_FALSE:
+
+        MOV VELHA[BX][SI],'+'
+
+        RET
+    TESTA_FORK ENDP
+
 END MAIN
 
 ; Otimizar ou organizar os VER_* PROCS e CHECK_WINNING
@@ -912,4 +1038,4 @@ END MAIN
 ; EXTRAS BARRICADE
 
 ; OTIMIZAR
-; 900!!!!!!!!!!!!!
+; 1000!!!!!!!!!!!!!
