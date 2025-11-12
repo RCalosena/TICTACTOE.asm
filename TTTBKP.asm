@@ -1,7 +1,20 @@
 TITLE JOGO DA VELHA
 .MODEL SMALL
-.386
 .STACK 100h
+
+PUSHALL MACRO
+    PUSH AX
+    PUSH BX
+    PUSH CX
+    PUSH DX
+ENDM
+
+POPALL MACRO
+    POP DX
+    POP CX
+    POP BX
+    POP AX
+ENDM
 
 PRINT MACRO FONTE
         ; imprime uma msg
@@ -38,14 +51,14 @@ ENDM
 
 SALVA_COORDS MACRO
     PUSH CX
-    MOV WORD PTR COORD_STORAGE[0],BX
-    MOV WORD PTR COORD_STORAGE[1],SI
+    MOV COORD_STORAGE[0],BX
+    MOV COORD_STORAGE[2],SI
     POP CX
 ENDM
 
 GET_AND_COMPARE MACRO
-    MOV BX,WORD PTR COORD_STORAGE[0]
-    MOV SI,WORD PTR COORD_STORAGE[1]
+    MOV BX,COORD_STORAGE[0]
+    MOV SI,COORD_STORAGE[2]
     AND BX,00FFh
     AND SI,00FFh
     CMP VELHA[BX][SI],'+'
@@ -54,9 +67,7 @@ ENDM
 .DATA
     DIM EQU 3
 
-    VELHA DB '+', '+', '+'
-          DB '+', '+', '+'
-          DB '+', '+', '+'
+    VELHA DB DIM DUP(DIM DUP('+'))
 
     BEM_VINDO DB 'Modos de Jogo:',10,13,10,13,'1) Jogador Contra Jogador',10,13,'2) Jogador Contra CPU',10,13,'$'
     ESCOLHA DB 10,13,'Escolha: $'
@@ -71,7 +82,8 @@ ENDM
     MODO DB 0
     DIFFICULDADE DB 0
     JOGADAS DB 0
-    COORD_STORAGE DB 0,0
+    COORD_STORAGE DW 0,0
+    RNG_VELHO DW 0
 .CODE
     MAIN PROC
         MOV AX,@DATA
@@ -281,12 +293,66 @@ ENDM
         RET
     IS_OCCUPIED ENDP
 
+    PLAN_MOVE PROC
+
+        ; Executa a jogada do CPU em base a sua difficuldade
+        ; Difficuldade 1: pega uma coordenada aleatoria
+        ; Difficuldade 2: mesmo que a anterior mas também tenta ganhar ou bloquear ao jogador
+        ; Difficuldade 3: mesmo que a anterior mas sempre começa no meio ou nas esquinas
+
+        CMP DIFFICULDADE,1
+        JE RNDM
+
+        CMP DIFFICULDADE,2
+        JE WIN_OR_AVOID_LOSS
+
+        CMP JOGADAS,1
+        JA WIN_OR_AVOID_LOSS
+
+        CALL STRATEGIZE
+
+        JMP FOUND_MOVE
+
+        WIN_OR_AVOID_LOSS:
+        
+        CALL CHECK_WINNING
+        CMP AL,1
+        JE FOUND_MOVE
+
+        RNDM:
+        MOV CL,'O'
+        MOV DI,3
+
+        XOR SI,SI
+        XOR BX,BX
+
+        CALL RNG
+        MOV BX,AX
+        CALL RNG
+        MOV SI,AX
+        TO_ASM
+
+        CALL IS_OCCUPIED
+        CMP AL,1
+        JE RNDM
+        
+        FOUND_MOVE:
+        XOR DI,DI
+        MOV CL,'O'
+
+        RET
+    PLAN_MOVE ENDP
+
     MATRIZP PROC
 
         ; imprime a matriz salva
         ; adiciona bordas nos lados para estilizar
 
-        PUSHA
+        PUSH AX
+        PUSH BX
+        PUSH CX
+        PUSH DX
+        PUSH SI
 
         XOR SI,SI
 
@@ -318,7 +384,11 @@ ENDM
         DEC CH
         JNZ LINHA_LOOP
 
-        POPA
+        POP SI
+        POP DX
+        POP CX
+        POP BX
+        POP AX
 
         RET
     MATRIZP ENDP
@@ -435,7 +505,7 @@ ENDM
         PUSH DX
         MOV AX,DI        
         MOV CX,DIM
-        MUL CL            
+        MUL CX           
         MOV SI,AX
         POP DX
         POP CX
@@ -591,91 +661,109 @@ ENDM
 
     RNG PROC
 
-        ; retorna duas coordenadas aleatorias 1-3
-        ; resultado: BX = rndm(0-2), SI = rndm(0-6)
+        ; retorna um valor aleatório de 1 a DI
+        ; se DI eh zero, retorna zero
 
-        PUSH AX
+        PUSH BX
         PUSH CX
         PUSH DX
 
-        XOR BX,BX
+        ; pega o tempo do sistema em milesimos de segundos
         MOV AH,00h
+        ; guarda em CX:DX
         INT 1Ah
-        ADD DX,12756
 
-        T:
-        TEST DH,03h
-        JNZ NEXT_NUM
-        ADD DH,138
-        JMP T
+        ; pega o seed anterior e mistura com o timer de agora
+        MOV AX,RNG_VELHO
+        XOR AX,DX
+        XOR AX,CX
+        ; n aleatório constante
+        ADD AX,037A1h
 
-        NEXT_NUM:
-        AND DH,03h
-        MOV BL,DH
+        ; seed (em AX) = seed * 25173 (constante aleatoria) + 13849 (const aleatoria)
+        MOV BX,25173
 
-        T2:
-        TEST DL,03h
-        JNZ NEXT_C
-        ADD DL,117
-        JMP T2
+        ; AX * BX guardado em DX:AX
+        MUL BX
+        ; outra const aleatoria
+        ADD AX,13849
+        ; salva o seed para o seguinte call da RNG
+        MOV RNG_VELHO,AX
 
-        NEXT_C:
-        AND DX,0003h
-        MOV SI,DX
-        
-        TO_ASM
+        ; reduz o seed (AX) para o intervalo de 1-DI
+        XOR DX,DX
+        TEST DI,DI
+        JZ ZERO_RNG
+        ; DX = resto (0-DI-1)
+        DIV DI
+        MOV AX,DX
+        ; 1-DI
+        INC AX
 
+        JMP FINAL_RNG
+
+    ZERO_RNG:
+        XOR AX,AX
+
+    FINAL_RNG:
         POP DX
         POP CX
-        POP AX
+        POP BX
 
         RET
     RNG ENDP
 
-    PLAN_MOVE PROC
-
-        ; Executa a jogada do CPU em base a sua difficuldade
-        ; Difficuldade 1: pega uma coordenada aleatoria
-        ; Difficuldade 2: mesmo que a anterior mas também tenta ganhar ou bloquear ao jogador
-        ; Difficuldade 3: mesmo que a anterior mas sempre começa no meio ou nas esquinas
-
-        CMP DIFFICULDADE,1
-        JE RNDM
-
-        CMP DIFFICULDADE,2
-        JE WIN_OR_AVOID_LOSS
-
-        WIN_OR_AVOID_LOSS:
+    CHECK_WINNING PROC
+        ; Começa checando posivel vitoria ('O') first
+        MOV CL,'O'
+        ; DI determina a partir de qual coluna/linha/diagonal o escaneio acontece
+        XOR DI,DI
 
         JMP TRY_WIN
         TRY_BLOCK:
+        ; Agora checa posivel bloqueio do jogador
         MOV CL,'X'
+        XOR DI,DI
         TRY_WIN:
 
+        ; parametro para os VAR_ procs
         MOV DL,2
 
         COL:
         CALL VER_COLUNAS
         CMP AL,1
         JE WINC
+        INC DI
+        CMP DI,3
+        JB COL
+        XOR DI,DI
+
         LIN:
         CALL VER_LINHAS
         CMP AL,1
         JE WINL
+        INC DI
+        CMP DI,3
+        JB LIN
+        XOR DI,DI
+
         DIG:
         CALL VER_DIAGONAIS
         CMP AL,1
         JE WIND
+        INC DI
+        CMP DI,2
+        JB DIG
         CMP CL,'O'
         JE TRY_BLOCK
-        JMP RNDM
+        JMP BACK_FALSE
 
         WINC:
         GET_AND_COMPARE
         JE GO_BACK
         INC DI
         CMP DI,3
-        JNE COL
+        JB COL
         XOR DI,DI
         JMP LIN
 
@@ -684,7 +772,7 @@ ENDM
         JE GO_BACK
         INC DI
         CMP DI,3
-        JNE LIN
+        JB LIN
         XOR DI,DI
         JMP DIG
 
@@ -693,32 +781,95 @@ ENDM
         JE GO_BACK
         INC DI
         CMP DI,2
-        JNE DIG
+        JB DIG
         XOR DI,DI
-        JMP RNDM
 
-        RNDM:
+        BACK_FALSE:
+        XOR AL,AL
+        JMP RETURN_FALSE
 
-        RPT:
-        MOV CL,'O'
-        CALL RNG
-        CALL IS_OCCUPIED
-        CMP AL,1
-        JE RPT
-        
         GO_BACK:
-        XOR DI,DI
-        MOV CL,'O'
+        MOV AL,1
+
+        RETURN_FALSE:
 
         RET
-    PLAN_MOVE ENDP
 
+    CHECK_WINNING ENDP
+
+    STRATEGIZE PROC
+
+        PUSH AX
+        PUSH CX
+        PUSH DX
+
+        CWD
+        MOV AX,DIM
+        MOV CX,2
+        DIV CX
+        ADD AX,DX
+        MOV BX,AX
+        MOV SI,AX
+        TO_ASM
+        MOV CL,'O'
+        CALL IS_OCCUPIED
+        CMP AL,1
+        JNE FOUND
+
+        MOV DI,2
+
+        XOR SI,SI
+        XOR BX,BX
+
+        CALL RNG
+        CMP AX,1
+        JE ZEROBX
+
+        MOV BX,DIM
+        JMP TOSI
+
+        ZEROBX:
+        OR BX,1
+
+        MOV AX, RNG_VELHO
+        XOR AX, BX
+        ROR AX, 1
+        ADD AX, 137
+        MOV RNG_VELHO, AX
+
+        TOSI:
+
+        CALL RNG
+        CMP AX,1
+        JE ZEROSI
+
+        MOV SI,DIM
+        JMP TOASM
+
+        ZEROSI:
+        OR SI,1
+
+        TOASM:
+        TO_ASM
+        
+        FOUND:
+
+        POP DX
+        POP CX
+        POP AX
+
+        RET
+    STRATEGIZE ENDP
 END MAIN
 
-; Mudar RNG para uma chance que muda em base a "avaliable tiles"
 ; Otimizar ou organizar os VER_* PROCS e a lógica do WIN_OR_AVOID_LOSS
 
-; FAZER CPU DIFICIL
-; FAZER CPU IMPOSSIVEL
-; FAZER EXTRAS COM DEFINIÇÃO DE DIMENSÕES DA MATRIZ
+; CHECK_WINNING ainda não funciona em todas as ocasões
+
+; FAZER EXTRAS 
+; EXTRAS CPU IMPOSSIVEL
+; EXTRAS DEFINIÇÃO DE DIMENSÕES DA MATRIZ
+; EXTRAS BARRICADE
+
 ; OTIMIZAR
+; 800!!!!!!!!!!!!!
