@@ -1,6 +1,5 @@
 TITLE JOGO DA VELHA
 .MODEL SMALL
-.STACK 100h
 
 PUSHALL MACRO
     PUSH AX
@@ -64,12 +63,17 @@ GET_AND_COMPARE MACRO
     CMP VELHA[BX][SI],'+'
 ENDM
 
+.STACK 100h
 .DATA
     DIM EQU 3
 
     VELHA DB DIM DUP(DIM DUP('+'))
 
-    BEM_VINDO DB 'Modos de Jogo:',10,13,10,13,'1) Jogador Contra Jogador',10,13,'2) Jogador Contra CPU',10,13,'$'
+    LIMPA_TELA DB 20 DUP(10) ,'$'
+    BEM_VINDO DB 'Jogo da Velha',10,13,10,13,'Modos de Jogo:',10,13,10,13,'1) Jogador Contra Jogador',10,13,'2) Jogador Contra CPU',10,13,'3) Extras...',10,13,'$'
+    CREDITOS DB 'Criadores: Joao Vitor Schneider Avanzo | Giovanni Nicolas Tapia Rodriguez',10,13,'$'
+    OUTROS DB 10,13,'1) Definir Tamanho da Matriz',10,13,'2) BARRICADE',10,13,'3) Voltar...',10,13,'$'
+    MENU_MATRIZ DB 'Defina um tamanho para a sua matriz (3-9): $'
     ESCOLHA DB 10,13,'Escolha: $'
     DIFFICULDADES DB 10,13,10,13,'Difficuldades:',10,13,10,13,'1) Facil',10,13,'2) Medio',10,13,'3) Dificil',10,13,'4) Impossivel',10,13,'$'
     LINHA    DB 10,13,'Digite a linha (1-3): $'
@@ -89,18 +93,26 @@ ENDM
         MOV AX,@DATA
         MOV DS,AX
 
+        MENU_PRINCIPAL:
+
+        PRINT LIMPA_TELA
         PRINT BEM_VINDO
         PRINT ESCOLHA
 
         MOV CL,'1'
-        MOV CH,'2'
+        MOV CH,'3'
         CALL LEIA_E_VALIDA
+
         AND AL,0Fh
+        CMP AL,3
+        JE EXTRAS
+
         MOV MODO,AL
 
         CMP MODO,2
-        JNE PVP
+        JNE JOGO
 
+        PRINT LIMPA_TELA
         PRINT DIFFICULDADES
         PRINT ESCOLHA
 
@@ -109,8 +121,30 @@ ENDM
         CALL LEIA_E_VALIDA
         AND AL,0Fh
         MOV DIFFICULDADE,AL
+        JMP JOGO
 
-        PVP:
+        EXTRAS:
+
+        PRINT LIMPA_TELA
+        PRINT CREDITOS
+        PRINT OUTROS
+        PRINT ESCOLHA
+
+        MOV CL,'3'
+        MOV CH,'3'
+        CALL LEIA_E_VALIDA
+        AND AL,0Fh
+
+        CMP AL,1
+        JE TAMANHO
+
+        CMP AL,3
+        JE MENU_PRINCIPAL
+
+        TAMANHO:
+
+
+        JOGO:
         XOR CX,CX
         XOR DI,DI
         PULA_LINHA
@@ -299,6 +333,7 @@ ENDM
         ; Difficuldade 1: pega uma coordenada aleatoria
         ; Difficuldade 2: mesmo que a anterior mas também tenta ganhar ou bloquear ao jogador
         ; Difficuldade 3: mesmo que a anterior mas sempre começa no meio ou nas esquinas
+        ; Difficuldade 4: mesmo que a anterior mas se o jogador não esta por ganhar na terceira jogada, o CPU pega outro canto
 
         CMP DIFFICULDADE,1
         JE RNDM
@@ -309,13 +344,24 @@ ENDM
         CMP JOGADAS,1
         JA WIN_OR_AVOID_LOSS
 
-        CALL STRATEGIZE
+        STTGZ:
 
+        CALL STRATEGIZE
         JMP FOUND_MOVE
 
         WIN_OR_AVOID_LOSS:
         
         CALL CHECK_WINNING
+        CMP AL,1
+        JE FOUND_MOVE
+
+        CMP DIFFICULDADE,4
+        JNE RNDM
+
+        CMP JOGADAS,3
+        JNA STTGZ
+        
+        CALL CHECK_FORKS
         CMP AL,1
         JE FOUND_MOVE
 
@@ -533,7 +579,7 @@ ENDM
             JB NC ; Next Column
 
             CMP CH,DL
-            JE LTRUE
+            JAE LTRUE
 
             ; reset sucesso
             XOR DH,DH
@@ -611,7 +657,7 @@ ENDM
         JB ND ; Next Diagonal
 
         CMP CH,DL
-        JE DTRUE
+        JAE DTRUE
         ; reseteia sucesso
         XOR DH,DH
         XOR CH,CH
@@ -639,7 +685,7 @@ ENDM
         CMP DH,DIM
         JB NDI ; Next Diagonal Inverted
         CMP CH,DL
-        JE DTRUE
+        JAE DTRUE
         JMP DFALSE
 
         DTRUE:
@@ -754,6 +800,7 @@ ENDM
         INC DI
         CMP DI,2
         JB DIG
+        DIG_FALSE:
         CMP CL,'O'
         JE TRY_BLOCK
         JMP BACK_FALSE
@@ -783,6 +830,7 @@ ENDM
         CMP DI,2
         JB DIG
         XOR DI,DI
+        JMP DIG_FALSE
 
         BACK_FALSE:
         XOR AL,AL
@@ -802,6 +850,7 @@ ENDM
         PUSH AX
         PUSH CX
         PUSH DX
+        PUSH DI
 
         CWD
         MOV AX,DIM
@@ -816,11 +865,31 @@ ENDM
         CMP AL,1
         JNE FOUND
 
-        MOV DI,2
+        CMP VELHA[BX][SI],'X'
+        JE NOT_THIS_STRAT
+        CMP DIFFICULDADE,3
+        JE NOT_THIS_STRAT
+            CALL ANALISE
+            CMP BX,1
+            JNE JUST_FORK
+            CMP SI,3
+            JNE JUST_FORK
 
+            CMP AL,1
+            JE PLACE_ADJACENT
+            JMP NOT_THIS_STRAT
+
+            JUST_FORK:
+            CALL CHECK_FORKS
+            CMP AL,1
+            JE FOUND
+
+        NOT_THIS_STRAT:
+        MOV DI,2
         XOR SI,SI
         XOR BX,BX
 
+        OUTRO_CANTO:
         CALL RNG
         CMP AX,1
         JE ZEROBX
@@ -838,7 +907,6 @@ ENDM
         MOV RNG_VELHO, AX
 
         TOSI:
-
         CALL RNG
         CMP AX,1
         JE ZEROSI
@@ -851,20 +919,193 @@ ENDM
 
         TOASM:
         TO_ASM
-        
+        CALL IS_OCCUPIED
+        CMP AL,1
+        JE OUTRO_CANTO
+        JMP FOUND
+
+        PLACE_ADJACENT:
+        CALL FIND_ADJACENT
+
         FOUND:
 
+        POP DI
         POP DX
         POP CX
         POP AX
 
         RET
     STRATEGIZE ENDP
+
+    FIND_ADJACENT PROC
+
+        CWD
+        MOV AX,DIM
+        MOV CX,2
+        DIV CX
+        ADD AX,DX
+        MOV BX,AX
+        MOV SI,AX
+        TO_ASM
+
+        CMP VELHA[BX][SI-3],'+'
+        JNE NOT_HERE
+        SUB SI,3
+        JMP FOUND_ADJ
+
+        NOT_HERE:
+        CMP VELHA[BX][SI+3],'+'
+        JNE NOT_HERE2
+        ADD SI,3
+        JMP FOUND_ADJ
+
+        NOT_HERE2:
+        CMP VELHA[BX-1][SI],'+'
+        JNE NOT_HERE3
+        SUB BX,1
+        JMP FOUND_ADJ
+
+        NOT_HERE3:
+        ADD BX,1
+
+        FOUND_ADJ:
+
+        RET
+    FIND_ADJACENT ENDP
+
+    CHECK_FORKS PROC
+        
+        ; imprime a matriz salva
+        ; adiciona bordas nos lados para estilizar
+
+        PUSH CX
+        PUSH DX
+        PUSH DI
+
+        XOR DX,DX
+        XOR SI,SI
+
+        MOV CH,DIM
+        SCANEIA_LINHA:
+        MOV CL,DIM
+        XOR BX,BX
+            SCANEIA_COLUNA:
+                XOR DH,DH
+
+                CMP VELHA[BX][SI],'+'
+                JNE PROX_COORD
+
+                MOV VELHA[BX][SI],'X'
+                XOR DI,DI
+                MOV DL,2
+
+                PUSH CX
+                MOV CL,'X'
+                CALL TESTA_FORK
+                POP CX
+                CMP AL,1
+                JE FORK
+
+                PROX_COORD:
+
+                INC BX
+                DEC CL
+            JNZ SCANEIA_COLUNA
+
+        ADD SI,DIM
+        DEC CH
+        JNZ SCANEIA_LINHA
+        XOR AL,AL
+        JMP NO_FORK
+
+        FORK:
+
+        MOV VELHA[BX][SI],'O'
+        MOV AL,1
+
+        NO_FORK:
+
+        POP DI
+        POP DX
+        POP CX
+
+        RET
+    CHECK_FORKS ENDP
+
+    TESTA_FORK PROC
+
+        CALL VER_COLUNAS
+        CMP AL,1
+        JNE CFL
+
+        PUSH BX
+        PUSH SI
+        GET_AND_COMPARE
+        POP SI
+        POP BX
+        JNE CFL
+
+        INC DH
+
+        CFL:
+        CALL VER_LINHAS
+        CMP AL,1
+        JNE CFD
+
+        PUSH BX
+        PUSH SI
+        GET_AND_COMPARE
+        POP SI
+        POP BX
+        JNE CFD
+
+        INC DH
+
+        CFD:
+        CALL VER_DIAGONAIS
+        CMP AL,1
+        JNE RESULT
+        PUSH BX
+        PUSH SI
+        GET_AND_COMPARE
+        POP SI
+        POP BX
+        JNE RESULT
+        
+        INC DH
+
+        RESULT:
+        CMP DH,2
+        JAE FORK_TRUE
+
+        XOR AL,AL
+        JMP FORK_FALSE
+
+        FORK_TRUE:
+        MOV AL,1
+
+        FORK_FALSE:
+
+        MOV VELHA[BX][SI],'+'
+
+        RET
+    TESTA_FORK ENDP
+
+    ANALISE PROC
+        PUSH DX
+        MOV DL,2
+        MOV CL,'X'
+        CALL VER_DIAGONAIS
+        MOV CL,'O'
+        POP DX
+        GET_AND_COMPARE
+
+        RET
+    ANALISE ENDP
+
 END MAIN
 
-; Otimizar ou organizar os VER_* PROCS e a lógica do WIN_OR_AVOID_LOSS
-
-; CHECK_WINNING ainda não funciona em todas as ocasões
+; Otimizar ou organizar os VER_* PROCS e CHECK_WINNING
 
 ; FAZER EXTRAS 
 ; EXTRAS CPU IMPOSSIVEL
@@ -872,4 +1113,4 @@ END MAIN
 ; EXTRAS BARRICADE
 
 ; OTIMIZAR
-; 800!!!!!!!!!!!!!
+; 1000!!!!!!!!!!!!!
