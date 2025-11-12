@@ -3,10 +3,11 @@ TITLE JOGO DA VELHA
 include macros.inc
 .STACK 100h
 .DATA
+    ; Dimensões e criação do tabuleiro
     DIM EQU 3
-
     VELHA DB DIM DUP(DIM DUP('+'))
 
+    ; Mensagens e elementos
     LIMPA_TELA DB 20 DUP(10) ,'$'
     BEM_VINDO DB 'Jogo da Velha',10,13,10,13,'Modos de Jogo:',10,13,10,13,'1) Jogador Contra Jogador',10,13,'2) Jogador Contra CPU',10,13,'3) Extras...',10,13,'$'
     CREDITOS DB 'Criadores: Joao Vitor Schneider Avanzo | Giovanni Nicolas Tapia Rodriguez',10,13,'$'
@@ -21,6 +22,7 @@ include macros.inc
     EMPATE   DB 10,13,'empate!$'
     BORDA   DB ' | $'
 
+    ; Variaveis
     MODO DB 0
     DIFFICULDADE DB 0
     JOGADAS DB 0
@@ -33,41 +35,50 @@ include macros.inc
 
         MENU_PRINCIPAL:
 
+        ; Imprime o menu principal
         PRINT LIMPA_TELA
         PRINT BEM_VINDO
         PRINT ESCOLHA
 
+        ; Le só as teclas 1,2,3
         MOV CL,'1'
         MOV CH,'3'
         CALL LEIA_E_VALIDA
-
         AND AL,0Fh
+        ; Vai para o menu de Extras
         CMP AL,3
         JE EXTRAS
-
+        ; 1 e 2 indicam o modo de jogo (jogador vs jogador, jogador vs cpu)
         MOV MODO,AL
 
-        CMP MODO,2
-        JNE JOGO
+        ; Começa o jogo se o modo de jogo eh 1
+        CMP MODO,1
+        JE JOGO
 
+        ; Imprime o menu de difficuldades
         PRINT LIMPA_TELA
         PRINT DIFFICULDADES
         PRINT ESCOLHA
 
+        ; só as teclas 1,2,3,4
         MOV CL,'1'
         MOV CH,'4'
         CALL LEIA_E_VALIDA
+        ; resultado == nivel de difficuldade
         AND AL,0Fh
         MOV DIFFICULDADE,AL
+        ; começa
         JMP JOGO
 
         EXTRAS:
 
+        ; Imprime o menu de extras
         PRINT LIMPA_TELA
         PRINT CREDITOS
         PRINT OUTROS
         PRINT ESCOLHA
 
+        ; 
         MOV CL,'3'
         MOV CH,'3'
         CALL LEIA_E_VALIDA
@@ -76,6 +87,7 @@ include macros.inc
         CMP AL,1
         JE TAMANHO
 
+        ; volta
         CMP AL,3
         JE MENU_PRINCIPAL
 
@@ -83,7 +95,11 @@ include macros.inc
 
 
         JOGO:
+        ; CH define de quem eh o turno
+        ; CL guarda o Simbolo do jogador atual
         XOR CX,CX
+
+        ; Parametro para alguns procedimentos
         XOR DI,DI
         PULA_LINHA
 
@@ -94,12 +110,13 @@ include macros.inc
             MOV CL,'X'
             JMP SETUP
             JOGADOR_O:
-
             MOV CL,'O'
+            ; se o modo de jogo eh 2, 'O' eh o CPU
             CMP MODO,2
             JNE SETUP
-                        
+            ; Intelligência do CPU
             CALL PLAN_MOVE
+            ; Pula leitura dos inputs do jogador 'O'
             JMP CPU_SKIP
 
             SETUP:
@@ -111,22 +128,25 @@ include macros.inc
             MOV CL,'1'
             MOV CH,'3'
             CALL LEIA_E_VALIDA
+            ; transforma em numero e guarda em BX (apontador de coluna)
             AND AX,000Fh
             MOV BX,AX
             PRINT LINHA
             CALL LEIA_E_VALIDA
+            ; transforma em numeri e guarda em SI (apontador de linha)
             AND AX,000Fh
             MOV SI,AX
             POP CX
-            ; transforma BX e SI em coordenadas legíveis pelo programa
+            ; transforma BX e SI em coordenadas legíveis pelo programa (ex: 1,2 --> 0,3)
             TO_ASM
-            ; verifica se tá ocupada
+            ; verifica se a posição ja foi ocupada
             CALL IS_OCCUPIED
+            ; se verdadeiro, volte ao começo
             CMP AL,1
             JE COMECO
 
             CPU_SKIP:
-            ; coloca o X ou O na posição
+            ; coloca o X ou O na posição escolhida
             MOV VELHA[BX][SI],CL
 
             ; dois espaços
@@ -135,26 +155,20 @@ include macros.inc
 
             ; imprime matriz e verifica se ha vitoria
             CALL MATRIZP
-            
-            CMP JOGADAS,3
-            JNA NAOVER
-                ; passa por colunas linhas e diagonais para verificar se alguem ganhou
-                MOV DL,DIM
-                
-                CALL VER_COLUNAS
-                CMP AL,1
-                JE VITORIA
+            ; input dos procedimentos VER_
+            MOV DL,DIM
+            ; passa por colunas linhas e diagonais para verificar se alguem ganhou
+            CALL VER_COLUNAS
+            CMP AL,1
+            JE VITORIA
+            CALL VER_LINHAS
+            CMP AL,1
+            JE VITORIA
+            CALL VER_DIAGONAIS
+            CMP AL,1
+            JE VITORIA
 
-                CALL VER_LINHAS
-                CMP AL,1
-                JE VITORIA
-
-                CALL VER_DIAGONAIS
-                CMP AL,1
-                JE VITORIA
-            NAOVER:
-
-            ; CH == 1 { VEZ DO 'O' }
+            ; Muda de quem eh o turno
             INC CH
             ; incrementa o numero de jogadas
             MOV AL,JOGADAS
@@ -167,13 +181,15 @@ include macros.inc
 
         ; tipo de finalização
 
+        ; imprime empate e finaliza
         DRAW:
         PRINT EMPATE
         JMP FINAL
 
+        ; imprime mensagem do ganhador e finaliza
         VITORIA:
-        MOV DL,CL
-        MOV VENCEDOR[11],DL
+        ; coloca o simbolo do jogador que ganhou na mensagem
+        MOV VENCEDOR[11],CL
         PRINT VENCEDOR
 
         FINAL:
@@ -187,25 +203,24 @@ include macros.inc
         ;   CL = valor minimo
         ;   CH = valor maximo
 
+        ; le do teclado
         ; verifica se o caracter lido eh de CL a CH
-        ; caso contrário, apaga o caracter anterior e pede input de novo
+        ; caso contrário, apaga o caracter anterior e lê de novo
 
         PUSH DX
-
-        XOR AX,AX
         JMP READ
 
         VALIDA_DE_NOVO:
 
             CMP AL,CL
             JL INVALIDO
-
             CMP AL,CH
             JA INVALIDO
 
             JMP VALIDO
 
             INVALIDO:
+                ; imprime backspace, espaço e backspace de novo para apagar o caracter
                 MOV AH,2
                 MOV DL,8
                 INT 21h
@@ -219,7 +234,6 @@ include macros.inc
         JMP VALIDA_DE_NOVO
 
         VALIDO:
-
         POP DX
 
         RET
@@ -239,6 +253,7 @@ include macros.inc
 
         CHECK:
 
+        ; '+' eh uma casa livre
         MOV AL,VELHA[BX][SI]
         CMP AL,'+'
         JE FALSE
@@ -257,7 +272,6 @@ include macros.inc
         V:
         MOV AL,1
         JMP TRUE
-
 
         FALSE:
         XOR AL,AL
@@ -332,29 +346,32 @@ include macros.inc
         ; imprime a matriz salva
         ; adiciona bordas nos lados para estilizar
 
-        PUSH AX
-        PUSH BX
-        PUSH CX
-        PUSH DX
+        PUSHALL
         PUSH SI
 
+        ; linha
         XOR SI,SI
 
+        ; ch = linhas restantes
         MOV CH,DIM
         MOV AH,2
         LINHA_LOOP:
+        ; cl = colunas restantes
         MOV CL,DIM
+        ; coluna
         XOR BX,BX
             COLUNA_LOOP:
-
+                ; imprime borda
                 PUSH AX
                 PRINT BORDA
                 POP AX
 
+                ; imprime valor na matriz
                 MOV AL,VELHA[BX][SI]
                 MOV DL,AL
                 INT 21h
 
+                ; seguinte coluna
                 INC BX
                 DEC CL
             JNZ COLUNA_LOOP
@@ -364,15 +381,13 @@ include macros.inc
         PULA_LINHA
         POP AX
 
+        ; seguinte linha
         ADD SI,DIM
         DEC CH
         JNZ LINHA_LOOP
 
         POP SI
-        POP DX
-        POP CX
-        POP BX
-        POP AX
+        POPALL
 
         RET
     MATRIZP ENDP
@@ -384,21 +399,25 @@ include macros.inc
         ;   DL = Meta
         ;   DI = Começa a partir da (DI)a coluna
 
-        ; output:
+        ; outputs:
         ;   AL = 0 ou 1
+        ;   COORD_STORAGE = BX,SI
 
         ; escaneia as colunas por um valor igual a CL
-        ; cada sucesso incrementa um contador CH
+        ; cada sucesso incrementa o contador CH
         ; se CH é maior ou igual à meta DL o procedimento retorna verdadeiro (AL = 1)
+        ; coordenadas com valores diferentes de CL são guardadas no COORD_STORAGE
 
         PUSH BX
         PUSH CX
         PUSH DX
         PUSH SI
 
-        ; coordenadas
+        ; linha
         XOR SI,SI
+        ; contador de sucesso
         XOR CH,CH
+        ; contador do loop
         XOR DH,DH
 
         ; começa a partir da coluna indicada por DI
@@ -409,29 +428,30 @@ include macros.inc
         ; contador de scans
         MOV CL,DIM
         COUNT_F:
-            NL:
             CMP AL,VELHA[BX][SI]
             JNE SALVA_C
 
-            ; incrementa e compara com a meta
+            ; incrementa
             INC CH
             
+            ; seguinte fileira
             JMP SEGUINTE_F
                 SALVA_C:
+                ; guarda a posição
                 SALVA_COORDS
             SEGUINTE_F:
             ADD SI,DIM
             INC DH
             CMP DH,DIM
-            JB NL ; Next Line
+            JB COUNT_F
 
+            ; se a meta for atingida, termina o loop
             CMP CH,DL
             JAE CTRUE
 
             ; reseteia o contador de sucesso
             XOR DH,DH
             XOR CH,CH
-
             ; nova coluna
             XOR SI,SI
             INC BX
@@ -464,47 +484,47 @@ include macros.inc
         ;   DL = Meta
         ;   DI = Começa a partir da (DI)a linha
 
-        ; output:
+        ; outputs:
         ;   AL = 0 ou 1
+        ;   COORD_STORAGE = BX,SI
 
         ; escaneia as linhas por um valor igual a CL
-        ; cada sucesso incrementa um contador CH
+        ; cada sucesso incrementa o contador CH
         ; se CH é maior ou igual à meta DL o procedimento retorna verdadeiro (AL = 1)
+        ; coordenadas com valores diferentes de CL são guardadas no COORD_STORAGE
 
         PUSH BX
         PUSH CX
         PUSH DX
         PUSH SI
 
-        ; coordenadas
+        ; linha
         XOR SI,SI
+        ; coluna
         XOR BX,BX
+        ; sucessos
         XOR CH,CH
+        ; n de scans
         XOR DH,DH
 
         ; SI começa a partir do especificado em DI, então:
         ; SI = DI * DIM
-        PUSH AX
-        PUSH CX
-        PUSH DX
+        PUSHALL
         MOV AX,DI        
         MOV CX,DIM
         MUL CX           
         MOV SI,AX
-        POP DX
-        POP CX
-        POP AX         
+        POPALL    
 
-        ; guarda o simbolo em al
+        ; guarda o jogador em al
         MOV AL,CL
-        ; n de scans
+        ; contador de linhas
         MOV CL,DIM
         COUNT_L:
-            NC:
             CMP AL,VELHA[BX][SI]
             JNE SALVA_L
 
-            ; incrementa e compara com a meta
+            ; incrementa
             INC CH
 
             JMP SEGUINTE_L
@@ -514,8 +534,9 @@ include macros.inc
             INC BX
             INC DH
             CMP DH,DIM
-            JB NC ; Next Column
+            JB COUNT_L
 
+            ; se a meta eh atingida, termina o proc
             CMP CH,DL
             JAE LTRUE
 
@@ -554,12 +575,14 @@ include macros.inc
         ;   DL = Meta
         ;   DI = Começa a partir da (DI)a diagonal (0-1)
 
-        ; output:
+        ; outputs:
         ;   AL = 0 ou 1
+        ;   COORD_STORAGE = BX,SI
 
         ; escaneia as diagonais por um valor igual a CL
         ; cada sucesso incrementa um contador CH
         ; se CH é maior ou igual à meta DL o procedimento retorna verdadeiro (AL = 1)
+        ; coordenadas com valores diferentes de CL são guardadas no COORD_STORAGE
 
         PUSH BX
         PUSH CX
@@ -569,11 +592,14 @@ include macros.inc
         ; coordenadas
         XOR SI,SI
         XOR BX,BX
+
+        ; sucessos
         XOR CH,CH
+        ; loop
         XOR DH,DH
         ; simbolo do jogador em al
         MOV AL,CL
-
+        ; se DI == 1, escaneia só a diagonal espelhada
         CMP DI,1
         JE DI_SKIP
 
@@ -581,11 +607,13 @@ include macros.inc
         CMP AL,VELHA[BX][SI]
         JNE SALVA_D
 
-        ; incrementa sucesso e compara com a meta
+        ; incrementa sucesso
         INC CH
 
+        ; seguinte diagonal
         JMP SEGUINTE_D
             SALVA_D:
+            ; guarda a coordenada
             SALVA_COORDS
         SEGUINTE_D:
         ADD SI,DIM
@@ -594,6 +622,7 @@ include macros.inc
         CMP DH,DIM
         JB ND ; Next Diagonal
 
+        ; veja se atingiu a meta
         CMP CH,DL
         JAE DTRUE
         ; reseteia sucesso
@@ -601,8 +630,7 @@ include macros.inc
         XOR CH,CH
 
         DI_SKIP:
-
-        ; comeca no extremo direito
+        ; mesmo escaneio mas comeca no extremo direito
         XOR SI,SI
         MOV BX,2
 
@@ -610,7 +638,7 @@ include macros.inc
         CMP AL,VELHA[BX][SI]
         JNE SALVA_DIN
 
-        ; incrementa sucesso e compara
+        ; inc sucesso
         INC CH
 
         JMP SEGUINTE_DIN
@@ -645,7 +673,7 @@ include macros.inc
 
     RNG PROC
 
-        ; retorna um valor aleatório de 1 a DI
+        ; retorna com um valor aleatório de 1 a DI
         ; se DI eh zero, retorna zero
 
         PUSH BX
@@ -698,60 +726,73 @@ include macros.inc
     RNG ENDP
 
     CHECK_WINNING PROC
-        ; Começa checando posivel vitoria ('O') first
+        ; Começa checando posivel vitoria ('O')
         MOV CL,'O'
         ; DI determina a partir de qual coluna/linha/diagonal o escaneio acontece
         XOR DI,DI
 
         JMP TRY_WIN
         TRY_BLOCK:
-        ; Agora checa posivel bloqueio do jogador
+        ; Agora checa possivel bloqueio do jogador
         MOV CL,'X'
         XOR DI,DI
         TRY_WIN:
-
         ; parametro para os VAR_ procs
         MOV DL,2
 
+        ; verifica se tem dois simbolos consecutivos nas colunas
         COL:
         CALL VER_COLUNAS
         CMP AL,1
         JE WINC
+        ; escaneia de novo a partir de outra coluna 
+        ; (evita que não leia algumas possíveis vitórias/bloqueios)
         INC DI
-        CMP DI,3
+        ; até di chegar ao limite
+        CMP DI,DIM
         JB COL
         XOR DI,DI
 
+        ; mesma logica para as linhas
         LIN:
         CALL VER_LINHAS
         CMP AL,1
         JE WINL
+        ; escaneia todas as linhas
         INC DI
-        CMP DI,3
+        CMP DI,DIM
         JB LIN
         XOR DI,DI
 
+        ; mesma logica para as diagonais
         DIG:
         CALL VER_DIAGONAIS
         CMP AL,1
         JE WIND
+        ; escaneia todas as diagonais
         INC DI
         CMP DI,2
         JB DIG
+
         DIG_FALSE:
+        ; se não achou vitoria, tenta bloquear, se não achou, o procedimento retorna falso
         CMP CL,'O'
         JE TRY_BLOCK
         JMP BACK_FALSE
 
+        ; se VER_COLUNAS retorna verdadeiro
         WINC:
-        GET_AND_COMPARE
+        ; pega as ultimas coordenadas salvas (candidato para colocar o simbolo do CPU)
+        GET_AND_COMPARE ; compara com '+' no macro, se for igual, achou uma coordenada valida
         JE GO_BACK
-        INC DI
-        CMP DI,3
+        INC DI ; se a coordenada não for livre, verifica de novo a partir de outra coluna
+        CMP DI,DIM
         JB COL
-        XOR DI,DI
+        XOR DI,DI ; vai para o escaneio de linhas
         JMP LIN
 
+        ; se VER_LINHAS retorna verdadeiro
+        ; mesma lógica que o anterior
         WINL:
         GET_AND_COMPARE
         JE GO_BACK
@@ -761,6 +802,8 @@ include macros.inc
         XOR DI,DI
         JMP DIG
 
+        ; se VER_DIAGONAIS retorna verdadeiro
+        ; mesma lógica que o anterior
         WIND:
         GET_AND_COMPARE
         JE GO_BACK
@@ -770,15 +813,16 @@ include macros.inc
         XOR DI,DI
         JMP DIG_FALSE
 
+        ; retorna falso
         BACK_FALSE:
         XOR AL,AL
         JMP RETURN_FALSE
 
+        ; retorna verdadeiro
         GO_BACK:
         MOV AL,1
 
         RETURN_FALSE:
-
         RET
 
     CHECK_WINNING ENDP
@@ -790,54 +834,66 @@ include macros.inc
         PUSH DX
         PUSH DI
 
+        ; calcule o meio da matriz (necessário para matrizes de diferentes tamanhos)
+        ; cociente de (DIM / 2) + resto
         CWD
         MOV AX,DIM
         MOV CX,2
         DIV CX
         ADD AX,DX
+        ; guarda nos apontadores e transforma em coordenadas válidas
         MOV BX,AX
         MOV SI,AX
         TO_ASM
+        ; verifica se o meio ja foi pegado
         MOV CL,'O'
         CALL IS_OCCUPIED
         CMP AL,1
         JNE FOUND
 
+        ; se o meio contem um X ou a difficuldade eh 3 (difficil), pula
         CMP VELHA[BX][SI],'X'
         JE NOT_THIS_STRAT
         CMP DIFFICULDADE,3
         JE NOT_THIS_STRAT
+
+            ; analisa se o jogador pegou dois cantos opostos
             CALL ANALISE
+            ; se o simbolo do CPU esta no meio, procura situações de "dois vitorias"
             CMP BX,1
             JNE JUST_FORK
             CMP SI,3
             JNE JUST_FORK
-
+            ; se o simbolo não esta no meio, coloca numa lateral
             CMP AL,1
             JE PLACE_ADJACENT
             JMP NOT_THIS_STRAT
 
             JUST_FORK:
+            ; veja se o jogador vai causar uma dupla vitoria
             CALL CHECK_FORKS
             CMP AL,1
             JE FOUND
 
         NOT_THIS_STRAT:
+        ; parametro para RNG
         MOV DI,2
+
+        ; coordenadas
         XOR SI,SI
         XOR BX,BX
 
+        ; pega qualquer canto
+        ; se RNG = 1, coordenada == 0, se RNG == 2, coordenada == 3
         OUTRO_CANTO:
         CALL RNG
         CMP AX,1
         JE ZEROBX
-
         MOV BX,DIM
         JMP TOSI
 
         ZEROBX:
         OR BX,1
-
         MOV AX, RNG_VELHO
         XOR AX, BX
         ROR AX, 1
@@ -848,7 +904,6 @@ include macros.inc
         CALL RNG
         CMP AX,1
         JE ZEROSI
-
         MOV SI,DIM
         JMP TOASM
 
@@ -862,6 +917,7 @@ include macros.inc
         JE OUTRO_CANTO
         JMP FOUND
 
+        ; coloca numa lateral
         PLACE_ADJACENT:
         CALL FIND_ADJACENT
 
@@ -877,6 +933,7 @@ include macros.inc
 
     FIND_ADJACENT PROC
 
+        ; calcule o meio da matriz
         CWD
         MOV AX,DIM
         MOV CX,2
@@ -886,6 +943,7 @@ include macros.inc
         MOV SI,AX
         TO_ASM
 
+        ; veja se as laterais estão ocupadas
         CMP VELHA[BX][SI-3],'+'
         JNE NOT_HERE
         SUB SI,3
@@ -913,56 +971,67 @@ include macros.inc
 
     CHECK_FORKS PROC
         
-        ; imprime a matriz salva
-        ; adiciona bordas nos lados para estilizar
+        ; Verifica se alguma jogada futura do jogador vai terminar com duas possíveis vitorias
 
         PUSH CX
         PUSH DX
         PUSH DI
 
         XOR DX,DX
+        ; linha
         XOR SI,SI
 
+        ; contador linha
         MOV CH,DIM
         SCANEIA_LINHA:
+        ; contador coluna
         MOV CL,DIM
-        XOR BX,BX
-            SCANEIA_COLUNA:
-                XOR DH,DH
 
+        ; coluna
+        XOR BX,BX
+        
+            SCANEIA_COLUNA:
+
+                ; se ja foi ocupada a cordenada, pula para a seguinte
                 CMP VELHA[BX][SI],'+'
                 JNE PROX_COORD
 
+                ; simula que o jogador colocou X nessa coordenada
                 MOV VELHA[BX][SI],'X'
-                XOR DI,DI
-                MOV DL,2
 
+                ; verifica se tem duas possiveis vitorias
                 PUSH CX
                 MOV CL,'X'
                 CALL TESTA_FORK
+                ; tira o X simulado após a verificação
+                MOV VELHA[BX][SI],'+'
                 POP CX
+                ; encontrou fork
                 CMP AL,1
                 JE FORK
 
+                ; seguinte coordenada
                 PROX_COORD:
-
                 INC BX
                 DEC CL
             JNZ SCANEIA_COLUNA
 
+        ; seguinte linha
         ADD SI,DIM
         DEC CH
         JNZ SCANEIA_LINHA
+
+        ; retorna falso
         XOR AL,AL
         JMP NO_FORK
 
+        ; retorna verdadeiro
         FORK:
-
+        ; bloqueia o fork
         MOV VELHA[BX][SI],'O'
         MOV AL,1
 
         NO_FORK:
-
         POP DI
         POP DX
         POP CX
@@ -972,24 +1041,42 @@ include macros.inc
 
     TESTA_FORK PROC
 
+        ; input:
+        ;   CL = jogador
+        ; output:
+        ;   AL = 0-1
+
+        ; Verifica se existe mais de uma possível vitória do jogador
+
+        ; contador de possiveis vitorias
+        XOR DH,DH
+        ; parametros dos procedimentos VER_
+        XOR DI,DI
+        MOV DL,2
+        
+        ; checa colunas
         CALL VER_COLUNAS
         CMP AL,1
-        JNE CFL
+        JNE CFL ; ve linhas se falso
 
+        ; checa se a ultima coordenada eh livre
         PUSH BX
         PUSH SI
         GET_AND_COMPARE
         POP SI
         POP BX
-        JNE CFL
+        JNE CFL ; ve linhas se a coordenada estiver ocupada
 
+        ; têm possivel vitoria. Incrementa DH
         INC DH
 
+        ; checa linhas
         CFL:
         CALL VER_LINHAS
         CMP AL,1
         JNE CFD
 
+        ; checa se a ultima coordenada eh livre
         PUSH BX
         PUSH SI
         GET_AND_COMPARE
@@ -997,12 +1084,16 @@ include macros.inc
         POP BX
         JNE CFD
 
+        ; têm possivel vitoria. Incrementa DH
         INC DH
 
+        ; checa diagonais
         CFD:
         CALL VER_DIAGONAIS
         CMP AL,1
         JNE RESULT
+
+        ; checa se a ultima coordenada eh livre
         PUSH BX
         PUSH SI
         GET_AND_COMPARE
@@ -1010,26 +1101,31 @@ include macros.inc
         POP BX
         JNE RESULT
         
+        ; têm possivel vitoria. Incrementa DH
         INC DH
 
+        ; calcule o resultado
         RESULT:
         CMP DH,2
         JAE FORK_TRUE
 
+        ; retorna falso
         XOR AL,AL
         JMP FORK_FALSE
 
+        ; retorna verdadeiro
         FORK_TRUE:
         MOV AL,1
 
         FORK_FALSE:
-
-        MOV VELHA[BX][SI],'+'
-
         RET
     TESTA_FORK ENDP
 
     ANALISE PROC
+        
+        ; verifica se as diagonais têm mais de um X
+        ; retorna também as últimas coordenadas salvas
+
         PUSH DX
         MOV DL,2
         MOV CL,'X'
