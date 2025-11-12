@@ -278,17 +278,11 @@ include macros.inc
 
         CMP DIFFICULDADE,2
         JE WIN_OR_AVOID_LOSS
-        JMP STTGZ
-
-        STRAT:
-        CALL CHECK_FORKS
-        CMP AL,1
-        JE FOUND_MOVE
-
-        STTGZ:
 
         CMP JOGADAS,1
         JA WIN_OR_AVOID_LOSS
+
+        STTGZ:
 
         CALL STRATEGIZE
         JMP FOUND_MOVE
@@ -303,7 +297,11 @@ include macros.inc
         JNE RNDM
 
         CMP JOGADAS,3
-        JNA STRAT
+        JNA STTGZ
+        
+        CALL CHECK_FORKS
+        CMP AL,1
+        JE FOUND_MOVE
 
         RNDM:
         MOV CL,'O'
@@ -809,16 +807,22 @@ include macros.inc
         JE NOT_THIS_STRAT
         CMP DIFFICULDADE,3
         JE NOT_THIS_STRAT
-            PUSH DX
-            MOV DL,2
-            MOV CL,'X'
-            CALL VER_DIAGONAIS
-            MOV CL,'O'
-            POP DX
+            CALL ANALISE
+            CMP BX,1
+            JNE JUST_FORK
+            CMP SI,3
+            JNE JUST_FORK
+
             CMP AL,1
             JE PLACE_ADJACENT
-        NOT_THIS_STRAT:
+            JMP NOT_THIS_STRAT
 
+            JUST_FORK:
+            CALL CHECK_FORKS
+            CMP AL,1
+            JE FOUND
+
+        NOT_THIS_STRAT:
         MOV DI,2
         XOR SI,SI
         XOR BX,BX
@@ -841,7 +845,6 @@ include macros.inc
         MOV RNG_VELHO, AX
 
         TOSI:
-
         CALL RNG
         CMP AX,1
         JE ZEROSI
@@ -854,14 +857,12 @@ include macros.inc
 
         TOASM:
         TO_ASM
-
         CALL IS_OCCUPIED
         CMP AL,1
         JE OUTRO_CANTO
         JMP FOUND
 
         PLACE_ADJACENT:
-
         CALL FIND_ADJACENT
 
         FOUND:
@@ -1027,6 +1028,18 @@ include macros.inc
 
         RET
     TESTA_FORK ENDP
+
+    ANALISE PROC
+        PUSH DX
+        MOV DL,2
+        MOV CL,'X'
+        CALL VER_DIAGONAIS
+        MOV CL,'O'
+        POP DX
+        GET_AND_COMPARE
+
+        RET
+    ANALISE ENDP
 
 END MAIN
 
