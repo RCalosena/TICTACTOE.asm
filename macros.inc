@@ -34,15 +34,18 @@ ENDM
 TO_ASM MACRO
     ; transforma numeros de 1-3 em coordenadas de matriz
     ; assume que a coluna esta guardada em bx e que a linha esta guardada em si
+    PUSH DX
     PUSH AX
     ; coluna 0 .. 2 = coluna input - 1
     DEC BX
-    ; linha 0 .. 6 = (linha input - 1) * 3
+    ; linha 0 .. 6 = (linha input - 1) * DIM
     DEC SI
     MOV AX,SI
-    SHL SI,1 ; * 2
-    ADD SI,AX ; + valor original
+    MOV SI,DIM
+    MUL SI
+    MOV SI,AX
     POP AX
+    POP DX
 ENDM
 
 SALVA_COORDS MACRO

@@ -122,11 +122,12 @@ include macros.inc
             SETUP:
 
             ; input para a coluna e linha
-            ; caracteres fora de 1-3 sao omitidos
+            ; caracteres fora de 1-DIM sao omitidos
             PUSH CX
             PRINT COLUNA
             MOV CL,'1'
-            MOV CH,'3'
+            MOV CH,DIM
+            OR CH,30h
             CALL LEIA_E_VALIDA
             ; transforma em numero e guarda em BX (apontador de coluna)
             AND AX,000Fh
@@ -175,7 +176,7 @@ include macros.inc
             INC AL
             MOV JOGADAS,AL
             ; se o maximo de jogadas for atendido, eh empate
-            CMP JOGADAS,9
+            CMP JOGADAS,DIM*DIM
             JE DRAW
         JMP COMECO
 
@@ -297,12 +298,10 @@ include macros.inc
         JA WIN_OR_AVOID_LOSS
 
         STTGZ:
-
         CALL STRATEGIZE
         JMP FOUND_MOVE
 
         WIN_OR_AVOID_LOSS:
-        
         CALL CHECK_WINNING
         CMP AL,1
         JE FOUND_MOVE
@@ -319,7 +318,7 @@ include macros.inc
 
         RNDM:
         MOV CL,'O'
-        MOV DI,3
+        MOV DI,DIM
 
         XOR SI,SI
         XOR BX,BX
@@ -738,7 +737,8 @@ include macros.inc
         XOR DI,DI
         TRY_WIN:
         ; parametro para os VAR_ procs
-        MOV DL,2
+        MOV DL,DIM
+        DEC DL
 
         ; verifica se tem dois simbolos consecutivos nas colunas
         COL:
@@ -797,7 +797,7 @@ include macros.inc
         GET_AND_COMPARE
         JE GO_BACK
         INC DI
-        CMP DI,3
+        CMP DI,DIM
         JB LIN
         XOR DI,DI
         JMP DIG
@@ -944,15 +944,15 @@ include macros.inc
         TO_ASM
 
         ; veja se as laterais estão ocupadas
-        CMP VELHA[BX][SI-3],'+'
+        CMP VELHA[BX][SI-DIM],'+'
         JNE NOT_HERE
-        SUB SI,3
+        SUB SI,DIM
         JMP FOUND_ADJ
 
         NOT_HERE:
-        CMP VELHA[BX][SI+3],'+'
+        CMP VELHA[BX][SI+DIM],'+'
         JNE NOT_HERE2
-        ADD SI,3
+        ADD SI,DIM
         JMP FOUND_ADJ
 
         NOT_HERE2:
@@ -1052,7 +1052,8 @@ include macros.inc
         XOR DH,DH
         ; parametros dos procedimentos VER_
         XOR DI,DI
-        MOV DL,2
+        MOV DL,DIM
+        DEC DL
         
         ; checa colunas
         CALL VER_COLUNAS
@@ -1127,7 +1128,8 @@ include macros.inc
         ; retorna também as últimas coordenadas salvas
 
         PUSH DX
-        MOV DL,2
+        MOV DL,DIM
+        DEC DL
         MOV CL,'X'
         CALL VER_DIAGONAIS
         MOV CL,'O'
@@ -1142,7 +1144,7 @@ END MAIN
 ; Otimizar ou organizar os VER_* PROCS e CHECK_WINNING
 
 ; FAZER EXTRAS 
-; EXTRAS CPU IMPOSSIVEL
+; EXTRAS CPU INJUSTO
 ; EXTRAS DEFINIÇÃO DE DIMENSÕES DA MATRIZ
 ; EXTRAS BARRICADE
 
