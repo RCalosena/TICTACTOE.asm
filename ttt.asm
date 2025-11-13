@@ -549,7 +549,7 @@ include macros.inc
             JMP SEGUINTE_F
                 SALVA_C:
                 ; guarda a posição
-                SALVA_COORDS COORD_STORAGE
+                SALVA_COORDS
             SEGUINTE_F:
             ADD SI,DIM
             INC DH
@@ -640,7 +640,7 @@ include macros.inc
 
             JMP SEGUINTE_L
                 SALVA_L:
-                SALVA_COORDS COORD_STORAGE
+                SALVA_COORDS
             SEGUINTE_L:
             INC BX
             INC DH
@@ -725,7 +725,7 @@ include macros.inc
         JMP SEGUINTE_D
             SALVA_D:
             ; guarda a coordenada
-            SALVA_COORDS COORD_STORAGE
+            SALVA_COORDS
         SEGUINTE_D:
         ADD SI,DIM
         INC BX
@@ -755,7 +755,7 @@ include macros.inc
 
         JMP SEGUINTE_DIN
             SALVA_DIN:
-            SALVA_COORDS COORD_STORAGE
+            SALVA_COORDS
         SEGUINTE_DIN:
         ADD SI,DIM
         DEC BX
