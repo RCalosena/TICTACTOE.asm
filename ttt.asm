@@ -8,15 +8,16 @@ include macros.inc
     VELHA DB DIM DUP(DIM DUP('+'))
 
     ; Mensagens e elementos
-    LIMPA_TELA DB 20 DUP(10) ,'$'
+    LIMPA_TELA DB 25 DUP(10) ,'$'
     BEM_VINDO DB 'Jogo da Velha',10,13,10,13,'Modos de Jogo:',10,13,10,13,'1) Jogador Contra Jogador',10,13,'2) Jogador Contra CPU',10,13,'3) Extras...',10,13,'$'
     CREDITOS DB 'Criadores: Joao Vitor Schneider Avanzo | Giovanni Nicolas Tapia Rodriguez',10,13,'$'
-    OUTROS DB 10,13,'1) Definir Tamanho da Matriz',10,13,'2) BARRICADE',10,13,'3) Voltar...',10,13,'$'
-    MENU_MATRIZ DB 'Defina um tamanho para a sua matriz (3-9): $'
+    OUTROS DB 10,13,'1) Definir Tamanho do tabuleiro',10,13,'2) BARRICADE ',?,10,13,'3) Voltar...',10,13,'$'
+    MENU_MATRIZ DB 'Para definir o tamanho do tabuleiro, procure a constante ',10,13,34,'DIM EQU 3',34,'e muda para qualquer numero entre 1-9',10,13,'$'
+    MENU_MATRIZ_VOLTAR DB 10,13,'1) Voltar...$'
     ESCOLHA DB 10,13,'Escolha: $'
     DIFFICULDADES DB 10,13,10,13,'Difficuldades:',10,13,10,13,'1) Facil',10,13,'2) Medio',10,13,'3) Dificil',10,13,'4) Impossivel',10,13,'$'
-    LINHA    DB 10,13,'Digite a linha (1-3): $'
-    COLUNA   DB 10,13,'Digite a coluna (1-3): $'
+    LINHA    DB 10,13,'Digite a linha (1-',?,'): $'
+    COLUNA   DB 10,13,'Digite a coluna (1-',?,'): $'
     OCUPADA  DB 10,13,'Coordenada ocupada! Tente de novo.$'
     VENCEDOR  DB 10,13,'Jogador ',34,?,34,' venceu!$'
     EMPATE   DB 10,13,'empate!$'
@@ -28,13 +29,14 @@ include macros.inc
     JOGADAS DB 0
     COORD_STORAGE DW 0,0
     RNG_VELHO DW 0
+    BARR DB 0
+    LAST_BARR DW 14 DUP(0)
 .CODE
     MAIN PROC
         MOV AX,@DATA
         MOV DS,AX
 
         MENU_PRINCIPAL:
-
         ; Imprime o menu principal
         PRINT LIMPA_TELA
         PRINT BEM_VINDO
@@ -79,7 +81,7 @@ include macros.inc
         PRINT ESCOLHA
 
         ; 
-        MOV CL,'3'
+        MOV CL,'1'
         MOV CH,'3'
         CALL LEIA_E_VALIDA
         AND AL,0Fh
@@ -87,14 +89,28 @@ include macros.inc
         CMP AL,1
         JE TAMANHO
 
-        ; volta
-        CMP AL,3
-        JE MENU_PRINCIPAL
+        CMP AL,2
+        JE TOGGLE_BARR
+        JMP MENU_PRINCIPAL
 
         TAMANHO:
+        PRINT LIMPA_TELA
+        PRINT MENU_MATRIZ
+        PRINT MENU_MATRIZ_VOLTAR
+        MOV CL,'1'
+        MOV CH,'1'
+        CALL LEIA_E_VALIDA
+        JMP EXTRAS
 
+        TOGGLE_BARR:
+        CALL BARR_TOGG
+        JMP EXTRAS
 
         JOGO:
+        MOV CL,DIM
+        OR CL,30h
+        MOV COLUNA[21],CL
+        MOV LINHA[20],CL
         ; CH define de quem eh o turno
         ; CL guarda o Simbolo do jogador atual
         XOR CX,CX
@@ -154,8 +170,6 @@ include macros.inc
             PULA_LINHA
             PULA_LINHA
 
-            ; imprime matriz e verifica se ha vitoria
-            CALL MATRIZP
             ; input dos procedimentos VER_
             MOV DL,DIM
             ; passa por colunas linhas e diagonais para verificar se alguem ganhou
@@ -169,26 +183,38 @@ include macros.inc
             CMP AL,1
             JE VITORIA
 
+
             ; Muda de quem eh o turno
             INC CH
             ; incrementa o numero de jogadas
             MOV AL,JOGADAS
             INC AL
             MOV JOGADAS,AL
-            ; se o maximo de jogadas for atendido, eh empate
-            CMP JOGADAS,DIM*DIM
+            CALL VERIFICA_EMPATE
+            CMP AL,1
             JE DRAW
+
+            CMP BARR,1
+            JNE NO_BARR
+            CALL PLACE_BARR
+            NO_BARR:
+
+            ; imprime matriz
+            CALL MATRIZP
+
         JMP COMECO
 
         ; tipo de finalização
 
         ; imprime empate e finaliza
         DRAW:
+        CALL MATRIZP
         PRINT EMPATE
         JMP FINAL
 
         ; imprime mensagem do ganhador e finaliza
         VITORIA:
+        CALL MATRIZP
         ; coloca o simbolo do jogador que ganhou na mensagem
         MOV VENCEDOR[11],CL
         PRINT VENCEDOR
@@ -197,6 +223,19 @@ include macros.inc
         MOV AH,4Ch
         INT 21h
     MAIN ENDP
+
+    BARR_TOGG PROC
+        CMP OUTROS[48],251
+        JE OFF
+        MOV OUTROS[48],251
+        MOV BARR,1
+        JMP ON
+        OFF:
+        MOV OUTROS[48],' '
+        MOV BARR,0
+        ON:
+        RET
+    BARR_TOGG ENDP
 
     LEIA_E_VALIDA PROC
 
@@ -279,6 +318,79 @@ include macros.inc
         TRUE:
         RET
     IS_OCCUPIED ENDP
+
+    PLACE_BARR PROC
+
+        PUSHALL
+        PUSH DI
+
+        MOV CX,DIM
+        SUB CX,2
+        XOR DI,DI
+
+        REMOVE:
+        MOV BX,LAST_BARR[DI]
+        MOV SI,LAST_BARR[DI+2]
+        AND BX,00FFh
+        AND SI,00FFh
+        CMP VELHA[BX][SI],178
+        JNE STOP
+
+        MOV VELHA[BX][SI],'+'
+        ADD DI,4
+        LOOP REMOVE
+
+        MOV AL,DIM
+        CMP AL,3
+        JB BARRICADED
+
+        STOP:
+        MOV CX,DIM
+        SUB CX,2
+        XOR DI,DI
+
+        PLACE:
+
+        XOR SI,SI
+        XOR BX,BX
+
+        PUSH DI
+        MOV DI,DIM
+        CALL RNG
+        MOV BX,AX
+        CALL RNG
+        MOV SI,AX
+        TO_ASM
+        POP DI
+
+        CMP JOGADAS,2
+        JA PLACE_ANYWHERE
+        CMP VELHA[BX][SI],'+'
+        JNE PLACE
+        PLACE_ANYWHERE:
+        CMP VELHA[BX][SI],178
+        JE PLACE
+
+        CMP VELHA[BX][SI],'+'
+        JE NO_DEC
+        MOV AL,JOGADAS
+        DEC AL
+        MOV JOGADAS,AL
+        NO_DEC:
+        
+        MOV VELHA[BX][SI],178
+        MOV LAST_BARR[DI],BX
+        MOV LAST_BARR[DI+2],SI
+        ADD DI,4
+
+        LOOP PLACE
+        
+        BARRICADED:
+        POP DI
+        POPALL
+
+        RET
+    PLACE_BARR ENDP
 
     PLAN_MOVE PROC
 
@@ -437,7 +549,7 @@ include macros.inc
             JMP SEGUINTE_F
                 SALVA_C:
                 ; guarda a posição
-                SALVA_COORDS
+                SALVA_COORDS COORD_STORAGE
             SEGUINTE_F:
             ADD SI,DIM
             INC DH
@@ -528,7 +640,7 @@ include macros.inc
 
             JMP SEGUINTE_L
                 SALVA_L:
-                SALVA_COORDS
+                SALVA_COORDS COORD_STORAGE
             SEGUINTE_L:
             INC BX
             INC DH
@@ -613,7 +725,7 @@ include macros.inc
         JMP SEGUINTE_D
             SALVA_D:
             ; guarda a coordenada
-            SALVA_COORDS
+            SALVA_COORDS COORD_STORAGE
         SEGUINTE_D:
         ADD SI,DIM
         INC BX
@@ -631,7 +743,8 @@ include macros.inc
         DI_SKIP:
         ; mesmo escaneio mas comeca no extremo direito
         XOR SI,SI
-        MOV BX,2
+        MOV BX,DIM
+        DEC BX
 
         NDI:
         CMP AL,VELHA[BX][SI]
@@ -642,7 +755,7 @@ include macros.inc
 
         JMP SEGUINTE_DIN
             SALVA_DIN:
-            SALVA_COORDS
+            SALVA_COORDS COORD_STORAGE
         SEGUINTE_DIN:
         ADD SI,DIM
         DEC BX
@@ -669,6 +782,56 @@ include macros.inc
 
         RET
     VER_DIAGONAIS ENDP
+
+    VERIFICA_EMPATE PROC
+        
+        ; Verifica se não tem mais casas livres
+
+        PUSH BX
+        PUSH CX
+        PUSH SI
+
+        XOR AX,AX
+
+        ; linha
+        XOR SI,SI
+        ; ch = linhas restantes
+        MOV CH,DIM
+        LINHA_SCAN:
+        ; cl = colunas restantes
+        MOV CL,DIM
+        ; coluna
+        XOR BX,BX
+            COLUNA_SCAN:
+
+                CMP VELHA[BX][SI],'+'
+                JE DISP
+                INC AL
+                DISP:
+                ; seguinte coluna
+                INC BX
+                DEC CL
+            JNZ COLUNA_SCAN
+        ; seguinte linha
+        ADD SI,DIM
+        DEC CH
+        JNZ LINHA_SCAN
+
+        CMP AL,DIM*DIM
+        JB NODRAW
+        MOV AL,1
+        JMP YESDRAW
+
+        NODRAW:
+        XOR AL,AL
+
+        YESDRAW:
+        POP SI
+        POP CX
+        POP BX
+
+        RET
+    VERIFICA_EMPATE ENDP
 
     RNG PROC
 
