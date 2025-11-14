@@ -370,13 +370,6 @@ include macros.inc
         PLACE_ANYWHERE:
         CMP VELHA[BX][SI],178
         JE PLACE
-
-        CMP VELHA[BX][SI],'+'
-        JE NO_DEC
-        MOV AL,JOGADAS
-        DEC AL
-        MOV JOGADAS,AL
-        NO_DEC:
         
         MOV VELHA[BX][SI],178
         MOV LAST_BARR[DI],BX
@@ -1301,11 +1294,7 @@ include macros.inc
 
         RET
     ANALISE ENDP
-
 END MAIN
-
 ; Otimizar ou organizar os VER_* PROCS e CHECK_WINNING
-
 ; EXTRAS CPU INJUSTO
-
 ; OTIMIZAR
