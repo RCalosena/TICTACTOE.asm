@@ -1136,7 +1136,7 @@ include macros.inc
 
     FIND_ADJACENT PROC
 
-        ; calcule o meio da matriz
+        ; calcule o centro da matriz
         CWD
         MOV AX,DIM
         MOV CX,2
