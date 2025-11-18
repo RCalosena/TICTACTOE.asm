@@ -22,6 +22,7 @@ include macros.inc
     VENCEDOR  DB 10,13,'Jogador ',34,?,34,' venceu!$'
     EMPATE   DB 10,13,'empate!$'
     BORDA   DB ' | $'
+    PENSANDO DB 'pensando...$'
 
     ; Variaveis
     MODO DB 0
@@ -392,6 +393,8 @@ include macros.inc
         ; Difficuldade 2: mesmo que a anterior mas também tenta ganhar ou bloquear ao jogador
         ; Difficuldade 3: mesmo que a anterior mas sempre começa no meio ou nas esquinas
         ; Difficuldade 4: mesmo que a anterior mas se o jogador não esta por ganhar na terceira jogada, o CPU pega outro canto
+
+        CALL DELAY_SECONDS
 
         CMP DIFFICULDADE,1
         JE RNDM
@@ -1294,7 +1297,50 @@ include macros.inc
 
         RET
     ANALISE ENDP
+
+    DELAY_SECONDS PROC
+
+        ; Cria um delay que da a impresão de que o CPU fica pensando. 
+        ; Esse delay também ajuda a visualizar as Barricadas colocadas na jogada do CPU.
+
+        PUSHALL
+
+        ; system time
+        MOV AH,00h
+        INT 1Ah
+        MOV BX,DX
+
+        ; Converte o valor em segundos (3) para ticks
+        MOV AX,3
+        MOV CX,18
+        MUL CX ; 3 * 18
+        MOV CX,AX ; CX = ticks de espera
+
+        ; feedback para o usuario ("o programa não travou")
+        PRINT PENSANDO
+
+    WAIT_LOOP:
+        ; pega o sys time de novo
+        MOV AH,00h
+        INT 1Ah
+        SUB DX,BX ; DX = quantidade de tempo
+        JB WAIT_LOOP ; se DX for menor, tenta de novo
+    CMP DX,CX
+    JB WAIT_LOOP ; espera até o delay terminar
+        
+        ; apaga a mensagem de "pensando..."
+        MOV AH,2
+        MOV DL,13 ; começo da linha
+        INT 21h
+
+        ; 'apaga' a mensagem colocando um espaço por cima de cada caracter
+        MOV DL,' '
+        MOV CX,11
+        APAGA:
+            INT 21h
+        LOOP APAGA
+
+        POPALL
+        RET
+    DELAY_SECONDS ENDP
 END MAIN
-; Otimizar ou organizar os VER_* PROCS e CHECK_WINNING
-; EXTRAS CPU INJUSTO
-; OTIMIZAR
