@@ -11,9 +11,8 @@ include macros.inc
     LIMPA_TELA DB 25 DUP(10) ,'$'
     BEM_VINDO DB 'Jogo da Velha',10,13,10,13,'Modos de Jogo:',10,13,10,13,'1) Jogador Contra Jogador',10,13,'2) Jogador Contra CPU',10,13,'3) Extras...',10,13,'$'
     CREDITOS DB 'Criadores: Joao Vitor Schneider Avanzo | Giovanni Nicolas Tapia Rodriguez',10,13,'$'
-    OUTROS DB 10,13,'1) Definir Tamanho do tabuleiro',10,13,'2) BARRICADE ',?,10,13,'3) Voltar...',10,13,'$'
-    MENU_MATRIZ DB 'Para definir o tamanho do tabuleiro, procure a constante ',10,13,34,'DIM EQU 3',34,'e muda para qualquer numero entre 1-9',10,13,'$'
-    MENU_MATRIZ_VOLTAR DB 10,13,'1) Voltar...$'
+    OUTROS DB 10,13,'1) Definir tamanho do tabuleiro',10,13,'2) BARRICADE ',?,10,13,'3) Tirar delay do CPU ',?,10,13,'4) Voltar...',10,13,'$'
+    MENU_MATRIZ DB 'Para definir o tamanho do tabuleiro, procure a constante ',10,13,34,'DIM EQU 3',34,'e muda para qualquer numero entre 1-9',10,13,10,13,'1) Voltar... $'
     ESCOLHA DB 10,13,'Escolha: $'
     DIFFICULDADES DB 10,13,10,13,'Difficuldades:',10,13,10,13,'1) Facil',10,13,'2) Medio',10,13,'3) Dificil',10,13,'4) Impossivel',10,13,'$'
     LINHA    DB 10,13,'Digite a linha (1-',?,'): $'
@@ -31,6 +30,7 @@ include macros.inc
     COORD_STORAGE DW 0,0
     RNG_VELHO DW 0
     BARR DB 0
+    NO_THINK DB 0
     LAST_BARR DW 14 DUP(0)
 .CODE
     MAIN PROC
@@ -81,23 +81,26 @@ include macros.inc
         PRINT OUTROS
         PRINT ESCOLHA
 
-        ; 
+        ; opções 1-4
         MOV CL,'1'
-        MOV CH,'3'
+        MOV CH,'4'
         CALL LEIA_E_VALIDA
         AND AL,0Fh
 
+        ; 1 = menu tamanho da tela
         CMP AL,1
         JE TAMANHO
-
+        ; 2 = liga/desliga modo BARRICADE
         CMP AL,2
         JE TOGGLE_BARR
+        ; 3 = liga/desliga pensamento do computador
+        CMP AL,3
+        JE TOGGLE_THINK
         JMP MENU_PRINCIPAL
 
         TAMANHO:
         PRINT LIMPA_TELA
         PRINT MENU_MATRIZ
-        PRINT MENU_MATRIZ_VOLTAR
         MOV CL,'1'
         MOV CH,'1'
         CALL LEIA_E_VALIDA
@@ -107,11 +110,18 @@ include macros.inc
         CALL BARR_TOGG
         JMP EXTRAS
 
+        TOGGLE_THINK:
+        CALL THINK_TOGG
+        JMP EXTRAS
+
         JOGO:
+
+        ; Numero maximo aceitado pelo teclado = DIM
         MOV CL,DIM
         OR CL,30h
         MOV COLUNA[21],CL
         MOV LINHA[20],CL
+
         ; CH define de quem eh o turno
         ; CL guarda o Simbolo do jogador atual
         XOR CX,CX
@@ -226,6 +236,10 @@ include macros.inc
     MAIN ENDP
 
     BARR_TOGG PROC
+
+        ; liga/desliga o modo BARRICADE
+        ; coloca um check indicando que foi ligado
+
         CMP OUTROS[48],251
         JE OFF
         MOV OUTROS[48],251
@@ -237,6 +251,23 @@ include macros.inc
         ON:
         RET
     BARR_TOGG ENDP
+
+    THINK_TOGG PROC
+
+        ; liga/desliga o delay do CPU
+        ; coloca um check indicando que foi ligado
+
+        CMP OUTROS[73],251
+        JE TOFF
+        MOV OUTROS[73],251
+        MOV NO_THINK,1
+        JMP TON
+        TOFF:
+        MOV OUTROS[73],' '
+        MOV NO_THINK,0
+        TON:
+        RET
+    THINK_TOGG ENDP
 
     LEIA_E_VALIDA PROC
 
@@ -394,7 +425,10 @@ include macros.inc
         ; Difficuldade 3: mesmo que a anterior mas sempre começa no meio ou nas esquinas
         ; Difficuldade 4: mesmo que a anterior mas se o jogador não esta por ganhar na terceira jogada, o CPU pega outro canto
 
-        CALL DELAY_SECONDS
+        CMP NO_THINK,1
+        JE NAOPENSA
+            CALL DELAY
+        NAOPENSA:
 
         CMP DIFFICULDADE,1
         JE RNDM
@@ -1298,7 +1332,7 @@ include macros.inc
         RET
     ANALISE ENDP
 
-    DELAY_SECONDS PROC
+    DELAY PROC
 
         ; Cria um delay que da a impresão de que o CPU fica pensando. 
         ; Esse delay também ajuda a visualizar as Barricadas colocadas na jogada do CPU.
@@ -1342,5 +1376,5 @@ include macros.inc
 
         POPALL
         RET
-    DELAY_SECONDS ENDP
+    DELAY ENDP
 END MAIN
