@@ -425,20 +425,23 @@ include macros.inc
         ; Difficuldade 3: mesmo que a anterior mas sempre começa no meio ou nas esquinas
         ; Difficuldade 4: mesmo que a anterior mas se o jogador não esta por ganhar na terceira jogada, o CPU pega outro canto
 
+        ; pensa por 3 segundos (pode ser desabilitado em EXTRAS)
         CMP NO_THINK,1
         JE NAOPENSA
             CALL DELAY
         NAOPENSA:
 
+        ; gera uma coordenada aleatória (a partir do CPU facil)
         CMP DIFFICULDADE,1
         JE RNDM
 
+        ; verifica possível vitória/bloqueio (a partir do CPU medio)
         CMP DIFFICULDADE,2
         JE WIN_OR_AVOID_LOSS
 
+        ; se a dificuldade for maior e eh a primeira jogada escolha um lugar estratégico para começar
         CMP JOGADAS,1
         JA WIN_OR_AVOID_LOSS
-
         STTGZ:
         CALL STRATEGIZE
         JMP FOUND_MOVE
@@ -448,16 +451,18 @@ include macros.inc
         CMP AL,1
         JE FOUND_MOVE
 
+        ; se não achou uma jogada e não eh o CPU impossível, pega uma coordenada aleatoria
         CMP DIFFICULDADE,4
         JNE RNDM
-
+        ; se eh o CPU eh impossivel e as jogadas serem menores que 3, pega um lugar estratégico de novo
         CMP JOGADAS,3
         JNA STTGZ
-        
+        ; se mais de 3 jogadas feitas, procura bloqueios de vitorias duplas
         CALL CHECK_FORKS
         CMP AL,1
         JE FOUND_MOVE
 
+        ; gera um numero aleatório entre 1-DIM
         RNDM:
         MOV CL,'O'
         MOV DI,DIM
@@ -465,12 +470,14 @@ include macros.inc
         XOR SI,SI
         XOR BX,BX
 
+        ; guarda coordenadas novas
         CALL RNG
         MOV BX,AX
         CALL RNG
         MOV SI,AX
         TO_ASM
 
+        ; tenta de novo se as coordenadas estão ocupadas
         CALL IS_OCCUPIED
         CMP AL,1
         JE RNDM
@@ -1022,6 +1029,8 @@ include macros.inc
 
     STRATEGIZE PROC
 
+        ; Procura posições estratégicas no tabuleiro
+
         PUSH AX
         PUSH CX
         PUSH DX
@@ -1044,13 +1053,14 @@ include macros.inc
         CMP AL,1
         JNE FOUND
 
-        ; se o meio contem um X ou a difficuldade eh 3 (difficil), pula
+        ; se o meio contem um X ou a difficuldade eh 3 (difficil), pula essa lógica
         CMP VELHA[BX][SI],'X'
         JE NOT_THIS_STRAT
         CMP DIFFICULDADE,3
         JE NOT_THIS_STRAT
 
             ; analisa se o jogador pegou dois cantos opostos
+
             CALL ANALISE
             ; se o simbolo do CPU esta no meio, procura situações de "dois vitorias"
             CMP BX,1
@@ -1063,14 +1073,12 @@ include macros.inc
             JMP NOT_THIS_STRAT
 
             JUST_FORK:
-            ; veja se o jogador vai causar uma dupla vitoria
+            ; veja se o jogador pode ter uma dupla vitoria
             CALL CHECK_FORKS
             CMP AL,1
             JE FOUND
 
         NOT_THIS_STRAT:
-        ; parametro para RNG
-        MOV DI,2
 
         ; coordenadas
         XOR SI,SI
@@ -1079,6 +1087,8 @@ include macros.inc
         ; pega qualquer canto
         ; se RNG = 1, coordenada == 0, se RNG == 2, coordenada == 3
         OUTRO_CANTO:
+        ; parametro para RNG
+        MOV DI,2
         CALL RNG
         CMP AX,1
         JE ZEROBX
