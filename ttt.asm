@@ -1352,13 +1352,7 @@ include macros.inc
         ; system time
         MOV AH,00h
         INT 1Ah
-        MOV BX,DX
-
-        ; Converte o valor em segundos (3) para ticks
-        MOV AX,3
-        MOV CX,18
-        MUL CX ; 3 * 18
-        MOV CX,AX ; CX = ticks de espera
+        MOV BX,DX ; salva o tempo registrado em BX
 
         ; feedback para o usuario ("o programa não travou")
         PRINT PENSANDO
@@ -1369,7 +1363,7 @@ include macros.inc
         INT 1Ah
         SUB DX,BX ; DX = quantidade de tempo
         JB WAIT_LOOP ; se DX for menor, tenta de novo
-    CMP DX,CX
+    CMP DX,36 ; aprox 2 segundos (2 * 18)
     JB WAIT_LOOP ; espera até o delay terminar
         
         ; apaga a mensagem de "pensando..."
