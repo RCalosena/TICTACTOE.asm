@@ -1,6 +1,6 @@
 TITLE JOGO DA VELHA
 .MODEL SMALL
-include macros.inc
+INCLUDE macros.inc
 .STACK 100h
 .DATA
     ; Dimensões e criação do tabuleiro
@@ -14,10 +14,10 @@ include macros.inc
     OUTROS DB 10,13,'1) Definir tamanho do tabuleiro',10,13,'2) BARRICADE ',?,10,13,'3) Tirar delay do CPU ',?,10,13,'4) Voltar...',10,13,'$'
     MENU_MATRIZ DB 'Para definir o tamanho do tabuleiro, procure a constante ',10,13,34,'DIM EQU 3',34,'e muda para qualquer numero entre 1-9',10,13,10,13,'1) Voltar... $'
     ESCOLHA DB 10,13,'Escolha: $'
-    DIFFICULDADES DB 10,13,10,13,'Difficuldades:',10,13,10,13,'1) Facil',10,13,'2) Medio',10,13,'3) Dificil',10,13,'4) Impossivel',10,13,'$'
+    DIFFICULDADES DB 'Difficuldades:',10,13,10,13,'1) Facil',10,13,'2) Medio',10,13,'3) Dificil',10,13,'4) Impossivel',10,13,'$'
     LINHA    DB 10,13,'Digite a linha (1-',?,'): $'
     COLUNA   DB 10,13,'Digite a coluna (1-',?,'): $'
-    OCUPADA  DB 10,13,'Coordenada ocupada! Tente de novo.$'
+    OCUPADA  DB 10,13,'Coordenada ocupada! Tente de novo.',10,13,'$'
     VENCEDOR  DB 10,13,'Jogador ',34,?,34,' venceu!$'
     EMPATE   DB 10,13,'empate!$'
     BORDA   DB ' | $'
@@ -94,7 +94,22 @@ include macros.inc
         XOR DI,DI
         PULA_LINHA
 
+        ; coloca barricadas se o modo foi ativado
+        CMP BARR,1
+        JNE SKIP_BARR
+            CALL PLACE_BARR
+        SKIP_BARR:
+        PRINT LIMPA_TELA
+        JMP COMECO
+
+        TAKEN:
+            PRINT LIMPA_TELA
+            PRINT OCUPADA
+            PULA_LINHA
         COMECO:
+            ; imprime matriz
+            CALL MATRIZP
+
             ; determina o jogador atual
             AND CH,01h
             JNZ JOGADOR_O
@@ -135,7 +150,7 @@ include macros.inc
             CALL IS_OCCUPIED
             ; se verdadeiro, volte ao começo
             CMP AL,1
-            JE COMECO
+            JE TAKEN
 
             CPU_SKIP:
             ; coloca o X ou O na posição escolhida
@@ -174,8 +189,7 @@ include macros.inc
                 CALL PLACE_BARR
             NO_BARR:
 
-            ; imprime matriz
-            CALL MATRIZP
+            PRINT LIMPA_TELA
 
         JMP COMECO
 
@@ -183,12 +197,14 @@ include macros.inc
 
         ; imprime empate e finaliza
         DRAW:
+        PRINT LIMPA_TELA
         CALL MATRIZP
         PRINT EMPATE
         JMP FINAL
 
         ; imprime mensagem do ganhador e finaliza
         VITORIA:
+        PRINT LIMPA_TELA
         CALL MATRIZP
         ; coloca o simbolo do jogador que ganhou na mensagem
         MOV VENCEDOR[11],CL
@@ -302,25 +318,11 @@ include macros.inc
         ; verifica se a posição escolhida não esta vazia
         ; imprime uma mensagem se quem escolheu a posição eh um jogador
 
-        CHECK:
-
         ; '+' eh uma casa livre
         MOV AL,VELHA[BX][SI]
         CMP AL,'+'
         JE FALSE
 
-        ; verifica se eh jogador ou cpu
-        ; se eh cpu, nao imprime a mensagem
-        CMP CL,'O'
-        JNE PLAYER
-        CMP MODO,2
-        JNE PLAYER
-        JMP V
-
-        PLAYER:
-        PRINT OCUPADA
-
-        V:
         MOV AL,1
         JMP TRUE
 
@@ -1330,7 +1332,7 @@ include macros.inc
         MOV BX,DX ; salva o tempo registrado em BX
         MOV SI,8 ; apontador do vetor (PENSANDO)
 
-        ; feedback para o usuario ("PENSANDO")
+        ; feedback para o usuario ("pensando...")
         PRINT PENSANDO
 
         ; Timer para a animação do PENSANDO
