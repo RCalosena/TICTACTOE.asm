@@ -62,3 +62,55 @@ GET_AND_COMPARE MACRO
     AND SI,00FFh
     CMP VELHA[BX][SI],'+'
 ENDM
+
+APAGA_LINHA MACRO
+    LOCAL APAGA
+
+    PUSH CX
+    PUSH DX
+
+    MOV AH,2
+    MOV DL,13 ; mexe o cursor para o começo da linha
+    INT 21h
+
+    ; 'apaga' a mensagem colocando um espaço por cima de cada caracter
+    MOV DL,' '
+    MOV CX,11
+    APAGA:
+        INT 21h
+    LOOP APAGA
+
+    MOV DL,13
+    INT 21h
+
+    POP DX
+    POP CX
+ENDM
+
+CENTRO MACRO
+    CWD
+    MOV AX,DIM
+    MOV CX,2
+    DIV CX
+    ADD AX,DX
+    MOV BX,AX
+    MOV SI,AX
+    TO_ASM
+ENDM
+
+TOGGLE MACRO VAR, INDEX
+    LOCAL ON, OFF
+
+    ; liga/desliga opções (VAR) no menu Extras
+    ; coloca um check (no index especificado) indicando que foi ligado
+
+    CMP OUTROS[INDEX],251
+    JE OFF
+    MOV OUTROS[INDEX],251
+    MOV VAR,1
+    JMP ON
+    OFF:
+    MOV OUTROS[INDEX],' '
+    MOV VAR,0
+    ON:
+ENDM

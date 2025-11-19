@@ -21,7 +21,7 @@ include macros.inc
     VENCEDOR  DB 10,13,'Jogador ',34,?,34,' venceu!$'
     EMPATE   DB 10,13,'empate!$'
     BORDA   DB ' | $'
-    PENSANDO DB 'pensando...$'
+    PENSANDO DB 'pensando',?,?,?,'$'
 
     ; Variaveis
     MODO DB 0
@@ -75,44 +75,8 @@ include macros.inc
 
         EXTRAS:
 
-        ; Imprime o menu de extras
-        PRINT LIMPA_TELA
-        PRINT CREDITOS
-        PRINT OUTROS
-        PRINT ESCOLHA
-
-        ; opções 1-4
-        MOV CL,'1'
-        MOV CH,'4'
-        CALL LEIA_E_VALIDA
-        AND AL,0Fh
-
-        ; 1 = menu tamanho da tela
-        CMP AL,1
-        JE TAMANHO
-        ; 2 = liga/desliga modo BARRICADE
-        CMP AL,2
-        JE TOGGLE_BARR
-        ; 3 = liga/desliga pensamento do computador
-        CMP AL,3
-        JE TOGGLE_THINK
+        CALL MENU_EXTRAS
         JMP MENU_PRINCIPAL
-
-        TAMANHO:
-        PRINT LIMPA_TELA
-        PRINT MENU_MATRIZ
-        MOV CL,'1'
-        MOV CH,'1'
-        CALL LEIA_E_VALIDA
-        JMP EXTRAS
-
-        TOGGLE_BARR:
-        CALL BARR_TOGG
-        JMP EXTRAS
-
-        TOGGLE_THINK:
-        CALL THINK_TOGG
-        JMP EXTRAS
 
         JOGO:
 
@@ -194,7 +158,6 @@ include macros.inc
             CMP AL,1
             JE VITORIA
 
-
             ; Muda de quem eh o turno
             INC CH
             ; incrementa o numero de jogadas
@@ -205,9 +168,10 @@ include macros.inc
             CMP AL,1
             JE DRAW
 
+            ; coloca barricadas se o modo foi ativado
             CMP BARR,1
             JNE NO_BARR
-            CALL PLACE_BARR
+                CALL PLACE_BARR
             NO_BARR:
 
             ; imprime matriz
@@ -235,39 +199,55 @@ include macros.inc
         INT 21h
     MAIN ENDP
 
-    BARR_TOGG PROC
+    MENU_EXTRAS PROC
+        
+        ; menu de extras
 
-        ; liga/desliga o modo BARRICADE
-        ; coloca um check indicando que foi ligado
+        XTRAS:
 
-        CMP OUTROS[48],251
-        JE OFF
-        MOV OUTROS[48],251
-        MOV BARR,1
-        JMP ON
-        OFF:
-        MOV OUTROS[48],' '
-        MOV BARR,0
-        ON:
+        ; Imprime o menu de extras
+        PRINT LIMPA_TELA
+        PRINT CREDITOS
+        PRINT OUTROS
+        PRINT ESCOLHA
+
+        ; opções 1-4
+        MOV CL,'1'
+        MOV CH,'4'
+        CALL LEIA_E_VALIDA
+        AND AL,0Fh
+
+        ; 1 = menu tamanho da tela
+        CMP AL,1
+        JE TAMANHO
+        ; 2 = liga/desliga modo BARRICADE
+        CMP AL,2
+        JE TOGGLE_BARR
+        ; 3 = liga/desliga pensamento do computador
+        CMP AL,3
+        JE TOGGLE_THINK
+        JMP VOLTA
+
+        TAMANHO:
+        PRINT LIMPA_TELA
+        PRINT MENU_MATRIZ
+        MOV CL,'1'
+        MOV CH,'1'
+        CALL LEIA_E_VALIDA
+        JMP XTRAS
+
+        TOGGLE_BARR:
+        TOGGLE BARR 48
+        JMP XTRAS
+
+        TOGGLE_THINK:
+        TOGGLE NO_THINK 73
+        JMP XTRAS
+
+        VOLTA:
+
         RET
-    BARR_TOGG ENDP
-
-    THINK_TOGG PROC
-
-        ; liga/desliga o delay do CPU
-        ; coloca um check indicando que foi ligado
-
-        CMP OUTROS[73],251
-        JE TOFF
-        MOV OUTROS[73],251
-        MOV NO_THINK,1
-        JMP TON
-        TOFF:
-        MOV OUTROS[73],' '
-        MOV NO_THINK,0
-        TON:
-        RET
-    THINK_TOGG ENDP
+    MENU_EXTRAS ENDP
 
     LEIA_E_VALIDA PROC
 
@@ -288,7 +268,6 @@ include macros.inc
             JL INVALIDO
             CMP AL,CH
             JA INVALIDO
-
             JMP VALIDO
 
             INVALIDO:
@@ -353,39 +332,51 @@ include macros.inc
 
     PLACE_BARR PROC
 
+        ; coloca barricadas em pontos aleatorios do tabuleiro
+        ; n de barricadas muda com o tamanho da matriz (BARR = DIM - 2)
+        ; a posição das barricadas eh salva em LAST_BARR 
+        ; para depois remove-las e colocar novas a proxima vez que PLACE_BARR for chamado
+
         PUSHALL
         PUSH DI
 
+        ; q de barrs a serem removidas
         MOV CX,DIM
         SUB CX,2
         XOR DI,DI
 
+        ; pega pos das ultimas barrs no LAST_BARR
         REMOVE:
-        MOV BX,LAST_BARR[DI]
-        MOV SI,LAST_BARR[DI+2]
-        AND BX,00FFh
-        AND SI,00FFh
-        CMP VELHA[BX][SI],178
-        JNE STOP
+            MOV BX,LAST_BARR[DI]
+            MOV SI,LAST_BARR[DI+2]
+            AND BX,00FFh
+            AND SI,00FFh
+            ; se não tiver uma barreira na pos, para o loop
+            CMP VELHA[BX][SI],178
+            JNE STOP
 
-        MOV VELHA[BX][SI],'+'
-        ADD DI,4
+            ; apaga (coloca um + onde a barreira tava)
+            MOV VELHA[BX][SI],'+'
+            ; seguinte item no LAST_BARR
+            ADD DI,4
         LOOP REMOVE
 
+        ; se o tabuleiro e menor que 3x3, barricadas não são colocadas
         MOV AL,DIM
         CMP AL,3
         JB BARRICADED
 
         STOP:
+        ; q de barrs para colocar
         MOV CX,DIM
         SUB CX,2
         XOR DI,DI
 
         PLACE:
-
         XOR SI,SI
         XOR BX,BX
 
+        ; pega coordenadas aleatorias
         PUSH DI
         MOV DI,DIM
         CALL RNG
@@ -395,21 +386,25 @@ include macros.inc
         TO_ASM
         POP DI
 
+        ; evita colocar em cima do jogador na sua primeira jogada
         CMP JOGADAS,2
         JA PLACE_ANYWHERE
         CMP VELHA[BX][SI],'+'
         JNE PLACE
         PLACE_ANYWHERE:
+        ; evita colocar em cima de outra barreira
         CMP VELHA[BX][SI],178
         JE PLACE
         
+        ; coloca a barr e salva as coordenadas
         MOV VELHA[BX][SI],178
         MOV LAST_BARR[DI],BX
         MOV LAST_BARR[DI+2],SI
-        ADD DI,4
 
+        ; repete até CX (q de barrs) ser 0
+        ADD DI,4
         LOOP PLACE
-        
+
         BARRICADED:
         POP DI
         POPALL
@@ -420,32 +415,36 @@ include macros.inc
     PLAN_MOVE PROC
 
         ; Executa a jogada do CPU em base a sua difficuldade
-        ; Difficuldade 1: pega uma coordenada aleatoria
-        ; Difficuldade 2: mesmo que a anterior mas também tenta ganhar ou bloquear ao jogador
-        ; Difficuldade 3: mesmo que a anterior mas sempre começa no meio ou nas esquinas
-        ; Difficuldade 4: mesmo que a anterior mas se o jogador não esta por ganhar na terceira jogada, o CPU pega outro canto
+        ; As difficuldades são camadas, ou seja, se uma lógica não funcionar, utilizará a lógica da difficuldade anterior e assim por diante
 
-        ; pensa por 3 segundos (pode ser desabilitado em EXTRAS)
+        ; Difficuldade 1: pega uma coordenada aleatoria
+        ; Difficuldade 2: tenta ganhar ou bloquear ao jogador
+        ; Difficuldade 3: sempre começa no meio ou nas esquinas
+        ; Difficuldade 4: procura e bloqueia situações de dupla vitória do jogador
+
+        ; pensa por 2 segundos (pode ser desligado no EXTRAS)
         CMP NO_THINK,1
         JE NAOPENSA
             CALL DELAY
         NAOPENSA:
 
-        ; gera uma coordenada aleatória (a partir do CPU facil)
+        ; pula para a lógica da difficuldade 1
         CMP DIFFICULDADE,1
         JE RNDM
 
-        ; verifica possível vitória/bloqueio (a partir do CPU medio)
+        ; pula para a logica da difficuldade 2
         CMP DIFFICULDADE,2
         JE WIN_OR_AVOID_LOSS
 
-        ; se a dificuldade for maior e eh a primeira jogada escolha um lugar estratégico para começar
+        ; se difficuldade > 2 e eh a primeira jogada, escolha um lugar estratégico para começar
         CMP JOGADAS,1
         JA WIN_OR_AVOID_LOSS
         STTGZ:
+        ; meio, cantos, laterais ou verifica dupla vitoria
         CALL STRATEGIZE
         JMP FOUND_MOVE
 
+        ; ganha ou evita perder
         WIN_OR_AVOID_LOSS:
         CALL CHECK_WINNING
         CMP AL,1
@@ -454,10 +453,12 @@ include macros.inc
         ; se não achou uma jogada e não eh o CPU impossível, pega uma coordenada aleatoria
         CMP DIFFICULDADE,4
         JNE RNDM
-        ; se eh o CPU eh impossivel e as jogadas serem menores que 3, pega um lugar estratégico de novo
+
+        ; se difficuldade == 4 e jogadas < 3, pega um lugar estratégico de novo
         CMP JOGADAS,3
         JNA STTGZ
-        ; se mais de 3 jogadas feitas, procura bloqueios de vitorias duplas
+
+        ; se > 3 jogadas, procura evitar vitorias duplas do jogador
         CALL CHECK_FORKS
         CMP AL,1
         JE FOUND_MOVE
@@ -465,12 +466,11 @@ include macros.inc
         ; gera um numero aleatório entre 1-DIM
         RNDM:
         MOV CL,'O'
-        MOV DI,DIM
-
         XOR SI,SI
         XOR BX,BX
 
-        ; guarda coordenadas novas
+        ; gera as coordenadas
+        MOV DI,DIM
         CALL RNG
         MOV BX,AX
         CALL RNG
@@ -483,8 +483,8 @@ include macros.inc
         JE RNDM
         
         FOUND_MOVE:
-        XOR DI,DI
         MOV CL,'O'
+        XOR DI,DI
 
         RET
     PLAN_MOVE ENDP
@@ -504,34 +504,34 @@ include macros.inc
         MOV CH,DIM
         MOV AH,2
         LINHA_LOOP:
-        ; cl = colunas restantes
-        MOV CL,DIM
-        ; coluna
-        XOR BX,BX
-            COLUNA_LOOP:
-                ; imprime borda
-                PUSH AX
-                PRINT BORDA
-                POP AX
+            ; cl = colunas restantes
+            MOV CL,DIM
+            ; coluna
+            XOR BX,BX
+                COLUNA_LOOP:
+                    ; imprime borda
+                    PUSH AX
+                    PRINT BORDA
+                    POP AX
 
-                ; imprime valor na matriz
-                MOV AL,VELHA[BX][SI]
-                MOV DL,AL
-                INT 21h
+                    ; imprime valor na matriz
+                    MOV AL,VELHA[BX][SI]
+                    MOV DL,AL
+                    INT 21h
 
-                ; seguinte coluna
-                INC BX
-                DEC CL
-            JNZ COLUNA_LOOP
+                    ; seguinte coluna
+                    INC BX
+                    DEC CL
+                JNZ COLUNA_LOOP
 
-        PUSH AX
-        PRINT BORDA
-        PULA_LINHA
-        POP AX
+            PUSH AX
+            PRINT BORDA
+            PULA_LINHA
+            POP AX
 
-        ; seguinte linha
-        ADD SI,DIM
-        DEC CH
+            ; seguinte linha
+            ADD SI,DIM
+            DEC CH
         JNZ LINHA_LOOP
 
         POP SI
@@ -840,11 +840,9 @@ include macros.inc
         ; coluna
         XOR BX,BX
             COLUNA_SCAN:
-
+                ; se tem uma casa livre, não tem empate
                 CMP VELHA[BX][SI],'+'
-                JE DISP
-                INC AL
-                DISP:
+                JE NODRAW
                 ; seguinte coluna
                 INC BX
                 DEC CL
@@ -854,8 +852,7 @@ include macros.inc
         DEC CH
         JNZ LINHA_SCAN
 
-        CMP AL,DIM*DIM
-        JB NODRAW
+        ; teve empate
         MOV AL,1
         JMP YESDRAW
 
@@ -872,7 +869,7 @@ include macros.inc
 
     RNG PROC
 
-        ; retorna com um valor aleatório de 1 a DI
+        ; retorna com um valor aleatório de 1 a DI em AX
         ; se DI eh zero, retorna zero
 
         PUSH BX
@@ -1038,15 +1035,7 @@ include macros.inc
 
         ; calcule o meio da matriz (necessário para matrizes de diferentes tamanhos)
         ; cociente de (DIM / 2) + resto
-        CWD
-        MOV AX,DIM
-        MOV CX,2
-        DIV CX
-        ADD AX,DX
-        ; guarda nos apontadores e transforma em coordenadas válidas
-        MOV BX,AX
-        MOV SI,AX
-        TO_ASM
+        CENTRO
         ; verifica se o meio ja foi pegado
         MOV CL,'O'
         CALL IS_OCCUPIED
@@ -1060,19 +1049,14 @@ include macros.inc
         JE NOT_THIS_STRAT
 
             ; analisa se o jogador pegou dois cantos opostos
-
             CALL ANALISE
-            ; se o simbolo do CPU esta no meio, procura situações de "dois vitorias"
-            CMP BX,1
-            JNE JUST_FORK
-            CMP SI,3
-            JNE JUST_FORK
-            ; se o simbolo não esta no meio, coloca numa lateral
+            ; se o simbolo esta no meio, coloca numa lateral
             CMP AL,1
             JE PLACE_ADJACENT
-            JMP NOT_THIS_STRAT
+            ; se o simbolo do CPU nao esta no meio, procura situações de "dois vitorias"
+            CMP VELHA[BX][SI],'O'
+            JE NOT_THIS_STRAT
 
-            JUST_FORK:
             ; veja se o jogador pode ter uma dupla vitoria
             CALL CHECK_FORKS
             CMP AL,1
@@ -1136,15 +1120,10 @@ include macros.inc
 
     FIND_ADJACENT PROC
 
+        ; aponta a uma coordenada das laterais da matriz
+
         ; calcule o centro da matriz
-        CWD
-        MOV AX,DIM
-        MOV CX,2
-        DIV CX
-        ADD AX,DX
-        MOV BX,AX
-        MOV SI,AX
-        TO_ASM
+        CENTRO
 
         ; veja se as laterais estão ocupadas
         CMP VELHA[BX][SI-DIM],'+'
@@ -1183,52 +1162,46 @@ include macros.inc
         XOR DX,DX
         ; linha
         XOR SI,SI
-
-        ; contador linha
         MOV CH,DIM
         SCANEIA_LINHA:
-        ; contador coluna
-        MOV CL,DIM
+            ; coluna
+            XOR BX,BX
+            MOV CL,DIM
+                SCANEIA_COLUNA:
+                    ; se ja foi ocupada a cordenada, pula para a seguinte
+                    CMP VELHA[BX][SI],'+'
+                    JNE PROX_COORD
 
-        ; coluna
-        XOR BX,BX
-        
-            SCANEIA_COLUNA:
+                    ; simula que o jogador colocou X nessa coordenada
+                    MOV VELHA[BX][SI],'X'
 
-                ; se ja foi ocupada a cordenada, pula para a seguinte
-                CMP VELHA[BX][SI],'+'
-                JNE PROX_COORD
+                    ; verifica se tem duas possiveis vitorias
+                    PUSH CX
+                    MOV CL,'X'
+                    CALL TESTA_FORK
+                    ; tira o X simulado após a verificação
+                    MOV VELHA[BX][SI],'+'
+                    POP CX
+                    ; achou fork
+                    CMP AL,1
+                    JE FORK
 
-                ; simula que o jogador colocou X nessa coordenada
-                MOV VELHA[BX][SI],'X'
+                    ; seguinte coordenada
+                    PROX_COORD:
+                    INC BX
+                    DEC CL
+                JNZ SCANEIA_COLUNA
 
-                ; verifica se tem duas possiveis vitorias
-                PUSH CX
-                MOV CL,'X'
-                CALL TESTA_FORK
-                ; tira o X simulado após a verificação
-                MOV VELHA[BX][SI],'+'
-                POP CX
-                ; encontrou fork
-                CMP AL,1
-                JE FORK
-
-                ; seguinte coordenada
-                PROX_COORD:
-                INC BX
-                DEC CL
-            JNZ SCANEIA_COLUNA
-
-        ; seguinte linha
-        ADD SI,DIM
-        DEC CH
+            ; seguinte linha
+            ADD SI,DIM
+            DEC CH
         JNZ SCANEIA_LINHA
 
-        ; retorna falso
+        ; retorna falso se não achou forks
         XOR AL,AL
         JMP NO_FORK
 
-        ; retorna verdadeiro
+        ; retorna verdadeiro se achou
         FORK:
         ; bloqueia o fork
         MOV VELHA[BX][SI],'O'
@@ -1253,7 +1226,7 @@ include macros.inc
 
         ; contador de possiveis vitorias
         XOR DH,DH
-        ; parametros dos procedimentos VER_
+        ; parametros dos procedimentos VER_ (DI = começo, DL = meta)
         XOR DI,DI
         MOV DL,DIM
         DEC DL
@@ -1344,40 +1317,65 @@ include macros.inc
 
     DELAY PROC
 
-        ; Cria um delay que da a impresão de que o CPU fica pensando. 
-        ; Esse delay também ajuda a visualizar as Barricadas colocadas na jogada do CPU.
+        ; força o CPU a 'pensar' por 2 segundos 
+        ; (delay de 2 segundos que evita jogadas instantâneas do CPU)
 
         PUSHALL
+        PUSH SI
+        PUSH DI
 
         ; system time
         MOV AH,00h
         INT 1Ah
         MOV BX,DX ; salva o tempo registrado em BX
+        MOV SI,8 ; apontador do vetor (PENSANDO)
 
-        ; feedback para o usuario ("o programa não travou")
+        ; feedback para o usuario ("PENSANDO")
         PRINT PENSANDO
+
+        ; Timer para a animação do PENSANDO
+        MOV CX,9
+        PUSH CX
 
     WAIT_LOOP:
         ; pega o sys time de novo
         MOV AH,00h
         INT 1Ah
         SUB DX,BX ; DX = quantidade de tempo
-        JB WAIT_LOOP ; se DX for menor, tenta de novo
-    CMP DX,36 ; aprox 2 segundos (2 * 18)
+    JB WAIT_LOOP ; se o resultado eh negativo, tenta de novo
+
+        ; animação da mensagem
+        POP CX
+        CMP CX,36 ; se timer >= 2s, pula
+        JAE NODOT
+        CMP DX,CX ; quando o delay chegar a CX segundos, coloca um ponto novo na msg e imprime de novo
+        JNE NODOT
+        MOV PENSANDO[SI],'.'
+        INC SI
+        ADD CX,9
+        APAGA_LINHA
+        PUSH DX
+        PRINT PENSANDO
+        POP DX
+        NODOT:
+        PUSH CX
+
+
+    CMP DX,36 ; espera aprox 2 segundos (2 * 18 ticks)
     JB WAIT_LOOP ; espera até o delay terminar
-        
-        ; apaga a mensagem de "pensando..."
-        MOV AH,2
-        MOV DL,13 ; começo da linha
-        INT 21h
 
-        ; 'apaga' a mensagem colocando um espaço por cima de cada caracter
-        MOV DL,' '
-        MOV CX,11
-        APAGA:
-            INT 21h
-        LOOP APAGA
+        ; apaga os pontos colocados no vetor PENSANDO
+        MOV SI,8
+        REM_DOT:
+            MOV PENSANDO[SI],?
+            INC SI
+            CMP SI,10
+        JBE REM_DOT
+        APAGA_LINHA
 
+        POP CX
+        POP DI
+        POP SI
         POPALL
         RET
     DELAY ENDP
